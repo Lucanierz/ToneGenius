@@ -1,6 +1,7 @@
 // src/modules/SolfegeTrainerModule.tsx
 import React from "react";
 import MicAnswer from "../components/MicAnswer";
+import SettingsDialog from "../components/SettingsDialog";
 import { startPitchClass } from "../utils/audio";
 import { addSemitones, PC_TO_NAME } from "../utils/music";
 
@@ -44,14 +45,14 @@ const PRESETS: Record<string, DegreeId[]> = {
 };
 
 /** ===== Storage keys ===== */
-const K_SELECTED = "solfege.selected.v1";
-const K_ROOT_PC = "solfege.rootPc.v1";
-const K_ROOT_OCT = "solfege.rootOct.v1";
-const K_MIC = "solfege.mic.v1";
+const K_SELECTED  = "solfege.selected.v2";
+const K_ROOT_PC   = "solfege.rootPc.v1";
+const K_ROOT_OCT  = "solfege.rootOct.v1";
+const K_MIC       = "solfege.mic.v1";
+const K_MAX_JUMP  = "solfege.maxJump.v1"; // semitones (1..11), or 12 => no limit
 
 /** ===== Helpers ===== */
 function randomOf<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
-
 function loadSelected(): Set<DegreeId> {
   try {
     const raw = localStorage.getItem(K_SELECTED);
@@ -61,12 +62,15 @@ function loadSelected(): Set<DegreeId> {
       if (valid.length) return new Set(valid);
     }
   } catch {}
-  // default: minor pentatonic-ish to start pleasant
+  // default: minor-pentatonic-ish to start pleasant
   return new Set<DegreeId>(["1","b3","4","5","b7"]);
 }
-
 function saveSelected(sel: Set<DegreeId>) {
   try { localStorage.setItem(K_SELECTED, JSON.stringify(Array.from(sel))); } catch {}
+}
+function pcDistanceSemis(a: number, b: number): number {
+  const d = Math.abs(a - b) % 12;
+  return Math.min(d, 12 - d);
 }
 
 export default function SolfegeTrainerModule() {
@@ -90,9 +94,17 @@ export default function SolfegeTrainerModule() {
   const [micEnabled, setMicEnabled] = React.useState<boolean>(() => (localStorage.getItem(K_MIC) ?? "true") === "true");
   React.useEffect(() => { try { localStorage.setItem(K_MIC, String(micEnabled)); } catch {} }, [micEnabled]);
 
+  // Maximum jump size (in semitones between consecutive targets; 12 = no limit)
+  const [maxJump, setMaxJump] = React.useState<number>(() => {
+    const raw = Number(localStorage.getItem(K_MAX_JUMP) ?? 12);
+    return (raw >= 1 && raw <= 12) ? raw : 12;
+  });
+  React.useEffect(() => { try { localStorage.setItem(K_MAX_JUMP, String(maxJump)); } catch {} }, [maxJump]);
+
   // Current target
   type Target = { id: DegreeId; name: string; semitones: number; answerPc: number; };
   const [target, setTarget] = React.useState<Target | null>(null);
+  const prevTargetRef = React.useRef<Target | null>(null);
 
   // Audio play/suspend
   const [isPlayingRoot, setIsPlayingRoot] = React.useState(false);
@@ -104,18 +116,45 @@ export default function SolfegeTrainerModule() {
   const HOLD_MS = 500;
   const CENTS_TOL = 25;
 
-  // Question creation
+  // Settings dialog
+  const [openSettings, setOpenSettings] = React.useState(false);
+
+  // Build entries from PC_TO_NAME (Record<number, string>), sorted by pc
+  const ROOT_ENTRIES = React.useMemo(
+    () =>
+      Object.entries(PC_TO_NAME as Record<number, string>)
+        .map(([pc, name]) => ({ pc: Number(pc), name }))
+        .sort((a, b) => a.pc - b.pc),
+    []
+  );
+
+  // Question creation with max-jump constraint (by pitch class distance)
   function pickTarget() {
     const ids = Array.from(selected);
     if (ids.length === 0) { setTarget(null); return; }
-    const chosen = randomOf(ids);
+
+    const prev = prevTargetRef.current;
+    let pool = ids;
+
+    if (prev && maxJump < 12) {
+      const prevSemis = prev.semitones % 12;
+      pool = ids.filter((id) => {
+        const s = DEG_BY_ID[id].semitones % 12;
+        return pcDistanceSemis(prevSemis, s) <= maxJump;
+      });
+      if (pool.length === 0) pool = ids; // fallback if constraint empties pool
+    }
+
+    const chosen = randomOf(pool);
     const d = DEG_BY_ID[chosen];
     const answerPc = addSemitones(rootPc, d.semitones);
-    setTarget({ id: d.id, name: d.name, semitones: d.semitones, answerPc });
+    const t: Target = { id: d.id, name: d.name, semitones: d.semitones, answerPc };
+    setTarget(t);
+    prevTargetRef.current = t;
   }
 
   React.useEffect(() => { pickTarget(); }, []);
-  React.useEffect(() => { pickTarget(); }, [selected, rootPc]);
+  React.useEffect(() => { pickTarget(); }, [selected, rootPc, maxJump]);
 
   // On correct via mic
   const handleMicCorrect = React.useCallback(() => {
@@ -161,17 +200,15 @@ export default function SolfegeTrainerModule() {
     setSelected(new Set(ids));
   }
 
-  // Build entries from PC_TO_NAME (Record<number, string>), sorted by pc
-  const ROOT_ENTRIES = React.useMemo(
-    () =>
-      Object.entries(PC_TO_NAME as Record<number, string>)
-        .map(([pc, name]) => ({ pc: Number(pc), name }))
-        .sort((a, b) => a.pc - b.pc),
-    []
-  );
-
   return (
     <div className="panel">
+      {/* Inline header tools (gear for settings) */}
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 6 }}>
+        <button className="icon-btn" onClick={() => setOpenSettings(true)} title="Settings" aria-label="Open settings">
+          ⚙️
+        </button>
+      </div>
+
       {/* ===== Target card ===== */}
       {target ? (
         <>
@@ -180,19 +217,25 @@ export default function SolfegeTrainerModule() {
               <div className="hero-label">Solfege</div>
               <div className="hero-note">{target.name}</div>
             </div>
+
+            {/* REPLACED "Function" WITH ACTUAL TARGET NOTE */}
             <div className="hero-block">
-              <div className="hero-label">Function</div>
+              <div className="hero-label">Target Note</div>
               <div className="hero-interval">
-                <span className="hero-name">{target.id}</span>
+                <span className="hero-name">
+                  {(PC_TO_NAME as Record<number,string>)[target.answerPc]}
+                </span>
               </div>
             </div>
+
             <div className="hero-block">
               <div className="hero-label">Root (1)</div>
               <div className="hero-note">{(PC_TO_NAME as Record<number,string>)[rootPc]}</div>
             </div>
           </div>
+
           <div className="hero-sub muted centered" style={{ marginTop: 6 }}>
-            Sing/play <strong>{target.name}</strong> (degree {target.id}) relative to {(PC_TO_NAME as Record<number,string>)[rootPc]}.
+            Sing/play <strong>{target.name}</strong> (target {(PC_TO_NAME as Record<number,string>)[target.answerPc]}) relative to {(PC_TO_NAME as Record<number,string>)[rootPc]}. Octave doesn’t matter.
           </div>
 
           <div className="row center" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
@@ -218,7 +261,7 @@ export default function SolfegeTrainerModule() {
               onTouchStart={(e) => { e.preventDefault(); holdTarget(); }}
               onTouchEnd={stopTarget}
             >
-              ▶ Hold: Target ({target.name})
+              ▶ Hold: Target ({(PC_TO_NAME as Record<number,string>)[target.answerPc]})
             </button>
             <button
               className="button"
@@ -253,78 +296,101 @@ export default function SolfegeTrainerModule() {
         </p>
       )}
 
-      {/* ===== Settings ===== */}
-      <div className="settings-divider" />
-
-      <div className="settings-grid">
-        {/* Root selection */}
-        <section className="settings-section">
-          <h4>Root (1) preview &amp; selection</h4>
-          <div className="row" style={{ flexWrap: "wrap" }}>
-            <label className="check" style={{ gap: 8 }}>
-              <span>Root note</span>
-              <select
-                className="select"
-                value={rootPc}
-                onChange={(e) => setRootPc(Number(e.target.value))}
-              >
-                {ROOT_ENTRIES.map(({ pc, name }) => (
-                  <option key={pc} value={pc}>{name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="check" style={{ gap: 8 }}>
-              <span>Octave</span>
-              <select
-                className="select"
-                value={rootOct}
-                onChange={(e) => setRootOct(Number(e.target.value))}
-              >
-                {[2,3,4,5].map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </label>
-            <label className="check" style={{ gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={micEnabled}
-                onChange={(e) => setMicEnabled(e.target.checked)}
-              />
-              <span>Use microphone to detect when the pitch is correct</span>
-            </label>
-          </div>
-          <p className="muted" style={{ marginTop: 4 }}>
-            Hold the buttons above to preview the root and target. While audio plays, the mic is paused.
-          </p>
-        </section>
-
-        <div className="settings-divider" />
-
-        {/* Degree selection */}
-        <section className="settings-section">
-          <h4>Included degrees (functions)</h4>
-          <div className="picker-grid" style={{ gridTemplateColumns: "repeat(6, minmax(80px, 1fr))" }}>
-            {DEGREES.map(d => (
-              <label key={d.id} className="check" style={{ gap: 6 }}>
+      {/* ===== Settings dialog ===== */}
+      <SettingsDialog title="Solfege Settings" open={openSettings} onClose={() => setOpenSettings(false)}>
+        <div className="settings-grid">
+          {/* Root selection */}
+          <section className="settings-section">
+            <h4>Root (1) &amp; Microphone</h4>
+            <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+              <label className="check" style={{ gap: 8 }}>
+                <span>Root note</span>
+                <select
+                  className="select"
+                  value={rootPc}
+                  onChange={(e) => setRootPc(Number(e.target.value))}
+                >
+                  {ROOT_ENTRIES.map(({ pc, name }) => (
+                    <option key={pc} value={pc}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="check" style={{ gap: 8 }}>
+                <span>Octave</span>
+                <select
+                  className="select"
+                  value={rootOct}
+                  onChange={(e) => setRootOct(Number(e.target.value))}
+                >
+                  {[2,3,4,5].map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </label>
+              <label className="check" style={{ gap: 8 }}>
                 <input
                   type="checkbox"
-                  checked={selected.has(d.id)}
-                  onChange={(e) => toggleDegree(d.id, e.target.checked)}
+                  checked={micEnabled}
+                  onChange={(e) => setMicEnabled(e.target.checked)}
                 />
-                <span>{d.id} <span className="muted">({d.name})</span></span>
+                <span>Use microphone to auto-detect the correct pitch</span>
               </label>
-            ))}
-          </div>
-          <div className="row" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
-            {Object.entries(PRESETS).map(([label, ids]) => (
-              <button key={label} className="chip-btn" onClick={() => loadPreset(ids)} title={`Load ${label}`}>
-                {label}
-              </button>
-            ))}
-            <button className="chip-btn" onClick={() => setSelected(new Set())}>Clear</button>
-            <button className="chip-btn" onClick={() => setSelected(new Set(DEGREES.map(d => d.id)))}>All</button>
-          </div>
-        </section>
-      </div>
+            </div>
+            <p className="muted" style={{ marginTop: 4 }}>
+              Hold the “Root” and “Target” buttons to preview tones. While audio plays, the mic is paused.
+            </p>
+          </section>
+
+          <div className="settings-divider" />
+
+          {/* Max jump */}
+          <section className="settings-section">
+            <h4>Maximum jump size</h4>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <label className="check" style={{ gap: 8 }}>
+                <span>Limit (semitones)</span>
+                <select
+                  className="select"
+                  value={maxJump}
+                  onChange={(e) => setMaxJump(Number(e.target.value))}
+                >
+                  <option value={12}>No limit</option>
+                  {Array.from({ length: 11 }, (_, i) => i + 1).map(n =>
+                    <option key={n} value={n}>{n}</option>
+                  )}
+                </select>
+              </label>
+              <span className="muted">Restricts how far the next target can move on the circle of semitones.</span>
+            </div>
+          </section>
+
+          <div className="settings-divider" />
+
+          {/* Degree selection + presets */}
+          <section className="settings-section">
+            <h4>Included degrees (functions)</h4>
+            <div className="picker-grid" style={{ gridTemplateColumns: "repeat(6, minmax(84px, 1fr))" }}>
+              {DEGREES.map(d => (
+                <label key={d.id} className="check" style={{ gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(d.id)}
+                    onChange={(e) => toggleDegree(d.id, e.target.checked)}
+                  />
+                  <span>{d.id} <span className="muted">({d.name})</span></span>
+                </label>
+              ))}
+            </div>
+            <div className="row" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+              {Object.entries(PRESETS).map(([label, ids]) => (
+                <button key={label} className="chip-btn" onClick={() => loadPreset(ids)} title={`Load ${label}`}>
+                  {label}
+                </button>
+              ))}
+              <button className="chip-btn" onClick={() => setSelected(new Set())}>Clear</button>
+              <button className="chip-btn" onClick={() => setSelected(new Set(DEGREES.map(d => d.id)))}>All</button>
+            </div>
+          </section>
+        </div>
+      </SettingsDialog>
     </div>
   );
 }

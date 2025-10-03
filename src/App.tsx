@@ -26,7 +26,7 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
 
 
 // Singleton modules: only one tile allowed
-const SINGLETONS = new Set<ModuleKey>(["quiz", "tuner"]);
+const SINGLETONS = new Set<ModuleKey>(["quiz", "tuner", "solfege"]);
 
 type Tile = { id: string; key: ModuleKey };
 

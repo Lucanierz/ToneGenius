@@ -3,6 +3,37 @@ import React from "react";
 import Tuner from "../components/Tuner";
 import { startMicAnalyser, detectPitchHzYIN } from "../utils/audio";
 
+/* One-Euro Filter (adaptive low-pass)
+   https://cristal.univ-lille.fr/~casiez/1euro/ */
+class OneEuro {
+  private freq: number;     // nominal update frequency (Hz)
+  private minCut: number;   // base cutoff (Hz)
+  private beta: number;     // speed coefficient
+  private dcut: number;     // cutoff for derivative
+  private xPrev: number | null = null;
+  private dxPrev: number | null = null;
+
+  constructor(freq = 60, minCut = 1.2, beta = 0.01, dcut = 1.5) {
+    this.freq = freq; this.minCut = minCut; this.beta = beta; this.dcut = dcut;
+  }
+  private alpha(cut: number) {
+    const te = 1 / Math.max(1e-6, this.freq);
+    const tau = 1 / (2 * Math.PI * cut);
+    return 1 / (1 + tau / te);
+  }
+  filter(x: number, dtSeconds: number): number {
+    this.freq = 1 / Math.max(1e-6, dtSeconds);
+    const dx = this.xPrev == null ? 0 : (x - this.xPrev) * this.freq;
+    const aD = this.alpha(this.dcut);
+    const dxHat = this.dxPrev == null ? dx : aD * dx + (1 - aD) * this.dxPrev;
+    const cut = this.minCut + this.beta * Math.abs(dxHat);
+    const aX = this.alpha(cut);
+    const xHat = this.xPrev == null ? x : aX * x + (1 - aX) * this.xPrev;
+    this.xPrev = xHat; this.dxPrev = dxHat;
+    return xHat;
+  }
+}
+
 export default function ChromaticTunerModule() {
   const [listening, setListening] = React.useState<boolean>(
     () => (localStorage.getItem("tuner.listen") ?? "true") === "true"
@@ -16,7 +47,7 @@ export default function ChromaticTunerModule() {
 
   // smoothing state
   const lastTsRef = React.useRef<number>(0);
-  const smoothHzRef = React.useRef<number | null>(null);
+  const euroRef = React.useRef<OneEuro>(new OneEuro(60, 1.2, 0.01, 1.5));
   const lastReportRef = React.useRef<number>(0);
 
   React.useEffect(() => {
@@ -31,6 +62,7 @@ export default function ChromaticTunerModule() {
   }, [listening]);
 
   async function start() {
+    // No compressor anywhere; just optional gentle band-limiting in the analyser chain
     const { analyser, cleanup } = await startMicAnalyser({
       fftSize: 8192,
       filtering: true,
@@ -43,7 +75,7 @@ export default function ChromaticTunerModule() {
     cleanupRef.current = cleanup;
     lastTsRef.current = performance.now();
     lastReportRef.current = 0;
-    smoothHzRef.current = null;
+    euroRef.current = new OneEuro(60, 1.2, 0.01, 1.5);
     tick();
   }
 
@@ -59,7 +91,8 @@ export default function ChromaticTunerModule() {
     if (!an) return;
 
     const now = performance.now();
-    const dt = Math.min(120, Math.max(0, now - (lastTsRef.current || now)));
+    const dtMs = Math.min(150, Math.max(0.001, now - (lastTsRef.current || now)));
+    const dt = dtMs / 1000; // seconds
     lastTsRef.current = now;
 
     // mic level (RMS)
@@ -70,32 +103,28 @@ export default function ChromaticTunerModule() {
     rms = Math.sqrt(rms / buf.length);
     setLevel(Math.min(1, rms * 8));
 
-    // pitch
+    // pitch via YIN
     const raw = detectPitchHzYIN(an, 30, 900, 0.12);
+    let smooth: number | null = null;
 
-    // adaptive smoothing by pitch (calmer for bass)
     if (raw && isFinite(raw)) {
-      const baseTau = 180; // ms
-      const extra = raw < 130 ? 200 : raw < 200 ? 120 : 40;
-      const tau = baseTau + extra;
-      if (smoothHzRef.current == null) smoothHzRef.current = raw;
-      else {
-        const k = 1 - Math.exp(-dt / tau);
-        smoothHzRef.current = smoothHzRef.current + (raw - smoothHzRef.current) * k;
-      }
+      // One-Euro smoothing directly on Hz (adaptive to motion)
+      smooth = euroRef.current.filter(raw, dt);
     } else {
       // gentle decay to null when no pitch
-      if (smoothHzRef.current != null) {
-        const k = 1 - Math.exp(-dt / 250);
-        smoothHzRef.current = smoothHzRef.current + (0 - smoothHzRef.current) * k;
-        if (Math.abs(smoothHzRef.current) < 1e-3) smoothHzRef.current = null;
+      if (hz != null) {
+        const k = 1 - Math.exp(-dt / 0.25); // ~250ms decay time
+        const next = hz + (0 - hz) * k;
+        smooth = Math.abs(next) < 1e-3 ? null : next;
+      } else {
+        smooth = null;
       }
     }
 
     // throttle UI updates
     if (now - lastReportRef.current >= 60) {
       lastReportRef.current = now;
-      setHz(smoothHzRef.current ?? null);
+      setHz(smooth ?? null);
     }
 
     rafRef.current = requestAnimationFrame(tick);
@@ -120,7 +149,7 @@ export default function ChromaticTunerModule() {
         <Tuner hz={hz} />
       </div>
 
-      {/* Mic meter under tuner */}
+      {/* Mic meter under tuner (unchanged) */}
       <div className="mic-row" style={{ justifyContent: "center" }}>
         <div className="mic-meter" title="Input level" style={{ width: 360, maxWidth: "90%" }}>
           <div className="mic-level" style={{ width: `${Math.round(level * 100)}%` }} />
