@@ -4,9 +4,10 @@ import MetronomeModule from "./modules/MetronomeModule";
 import ChromaticTunerModule from "./modules/ChromaticTunerModule";
 import SettingsDialog from "./components/SettingsDialog"; // reuse as a simple help modal
 import ClaveModule from "./modules/ClaveModule";
+import SolfegeTrainerModule from "./modules/SolfegeTrainerModule";
 
 import "./styles/index.css";
-type ModuleKey = "quiz" | "tuner" | "metro" | "clave";
+type ModuleKey = "quiz" | "tuner" | "metro" | "clave" | "solfege";
 
 type ModuleDef = {
   title: string;
@@ -19,7 +20,8 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
   quiz:  { title: "Interval Quiz",   icon: "🎯", render: () => <IntervalQuiz /> },
   tuner: { title: "Chromatic Tuner", icon: "🎚️", render: () => <ChromaticTunerModule /> },
   metro: { title: "Metronome",       icon: "🥁", render: () => <MetronomeModule /> },
-  clave: { title: "Clave",           icon: "🪘", render: () => <ClaveModule /> }, // NEW
+  clave: { title: "Clave",           icon: "🪘", render: () => <ClaveModule /> },
+  solfege: { title: "Solfege Trainer", icon: "🎤", render: () => <SolfegeTrainerModule /> },
 };
 
 
