@@ -3,9 +3,10 @@ import IntervalQuiz from "./components/IntervalQuiz";
 import MetronomeModule from "./modules/MetronomeModule";
 import ChromaticTunerModule from "./modules/ChromaticTunerModule";
 import SettingsDialog from "./components/SettingsDialog"; // reuse as a simple help modal
-import "./styles/index.css";
+import ClaveModule from "./modules/ClaveModule";
 
-type ModuleKey = "quiz" | "tuner" | "metro";
+import "./styles/index.css";
+type ModuleKey = "quiz" | "tuner" | "metro" | "clave";
 
 type ModuleDef = {
   title: string;
@@ -13,11 +14,14 @@ type ModuleDef = {
   render: () => React.ReactNode;
 };
 
+
 const MODULES: Record<ModuleKey, ModuleDef> = {
   quiz:  { title: "Interval Quiz",   icon: "🎯", render: () => <IntervalQuiz /> },
   tuner: { title: "Chromatic Tuner", icon: "🎚️", render: () => <ChromaticTunerModule /> },
   metro: { title: "Metronome",       icon: "🥁", render: () => <MetronomeModule /> },
+  clave: { title: "Clave",           icon: "🪘", render: () => <ClaveModule /> }, // NEW
 };
+
 
 // Singleton modules: only one tile allowed
 const SINGLETONS = new Set<ModuleKey>(["quiz", "tuner"]);
