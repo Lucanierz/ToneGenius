@@ -13,7 +13,6 @@ import {
 import IntervalPicker, { useIntervalSelection } from "./IntervalPicker";
 import SettingsDialog from "./SettingsDialog";
 import MicAnswer from "./MicAnswer";
-import Tuner from "./Tuner";
 import { startPitchClass } from "../utils/audio";
 
 type Direction = "up" | "down";
@@ -54,7 +53,7 @@ const STATS_STORAGE_KEY = "intervalQuizStatsV6";
 function loadStats(): Stats | null {
   try { const raw = localStorage.getItem(STATS_STORAGE_KEY); return raw ? JSON.parse(raw) as Stats : null; } catch { return null; }
 }
-function saveStats(s: Stats) { try { localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(s)); } catch { } }
+function saveStats(s: Stats) { try { localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(s)); } catch {} }
 function msToSec(ms: number) { return (ms / 1000).toFixed(1); }
 
 // sanitize input to 1 note + optional accidental
@@ -99,14 +98,13 @@ export default function IntervalQuiz() {
   });
   React.useEffect(() => { localStorage.setItem("intervalQuiz.direction", dirSetting); }, [dirSetting]);
 
-  // tuner + mic suppression while playing
-  const [lastPitchHz, setLastPitchHz] = React.useState<number | null>(null);
-  const [isPlaying, setIsPlaying] = React.useState(false);
-  const playStopRef = React.useRef<null | (() => void)>(null);
-
-  // accept window config
+  // hold/accept config
   const HOLD_MS = 500;
   const CENTS_TOL = 25;
+
+  // playback state (for hold-to-play)
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const playStopRef = React.useRef<null | (() => void)>(null);
 
   // stats
   const [stats, setStats] = React.useState<Stats>(() =>
@@ -127,7 +125,6 @@ export default function IntervalQuiz() {
     setQStartedAt(Date.now());
     setInput("");
     setDisabled(false);
-    setLastPitchHz(null);
     setIsPlaying(false);
     focusInputSoon();
   }
@@ -214,7 +211,7 @@ export default function IntervalQuiz() {
   }
   function stopPlayTarget() {
     if (playStopRef.current) {
-      try { playStopRef.current(); } catch { }
+      try { playStopRef.current(); } catch {}
       playStopRef.current = null;
     }
     setIsPlaying(false);
@@ -324,7 +321,8 @@ export default function IntervalQuiz() {
             </button>
           </div>
 
-          {/* Mic + Tuner */}
+          {/* Mic answer only (no embedded tuner).
+              Show a hint to add the Chromatic Tuner tile when mic mode is on. */}
           {micEnabled && (
             <>
               <MicAnswer
@@ -333,13 +331,13 @@ export default function IntervalQuiz() {
                 targetPc={question.answerPc}
                 onHeard={handleMicHeard}
                 onCorrect={handleMicCorrect}
-                onPitch={setLastPitchHz}
+                // no onPitch -> tuner removed from quiz
                 holdMs={HOLD_MS}
                 centsTolerance={CENTS_TOL}
               />
-              <div className="row center">
-                <Tuner hz={lastPitchHz} />
-              </div>
+              <p className="muted centered" style={{ marginTop: 6 }}>
+                Need a visual tuner? Add the <strong>Chromatic Tuner</strong> module from the menu (☰).
+              </p>
             </>
           )}
 

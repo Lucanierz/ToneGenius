@@ -4,8 +4,11 @@ import Tuner from "../components/Tuner";
 import { startMicAnalyser, detectPitchHzYIN } from "../utils/audio";
 
 export default function ChromaticTunerModule() {
-  const [listening, setListening] = React.useState<boolean>(() => (localStorage.getItem("tuner.listen") ?? "true") === "true");
+  const [listening, setListening] = React.useState<boolean>(
+    () => (localStorage.getItem("tuner.listen") ?? "true") === "true"
+  );
   const [hz, setHz] = React.useState<number | null>(null);
+  const [level, setLevel] = React.useState(0); // mic meter 0..1
 
   const analyserRef = React.useRef<AnalyserNode | null>(null);
   const cleanupRef = React.useRef<() => void>(() => {});
@@ -16,10 +19,12 @@ export default function ChromaticTunerModule() {
   const smoothHzRef = React.useRef<number | null>(null);
   const lastReportRef = React.useRef<number>(0);
 
-  React.useEffect(() => { localStorage.setItem("tuner.listen", String(listening)); }, [listening]);
+  React.useEffect(() => {
+    localStorage.setItem("tuner.listen", String(listening));
+  }, [listening]);
 
   React.useEffect(() => {
-    if (!listening) { stop(); setHz(null); return; }
+    if (!listening) { stop(); setHz(null); setLevel(0); return; }
     start().catch(() => setListening(false));
     return stop;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,6 +62,15 @@ export default function ChromaticTunerModule() {
     const dt = Math.min(120, Math.max(0, now - (lastTsRef.current || now)));
     lastTsRef.current = now;
 
+    // mic level (RMS)
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
+    let rms = 0;
+    for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+    rms = Math.sqrt(rms / buf.length);
+    setLevel(Math.min(1, rms * 8));
+
+    // pitch
     const raw = detectPitchHzYIN(an, 30, 900, 0.12);
 
     // adaptive smoothing by pitch (calmer for bass)
@@ -89,9 +103,9 @@ export default function ChromaticTunerModule() {
 
   return (
     <div className="panel">
-      <div className="panel-header">
-        <div className="panel-title">Chromatic Tuner</div>
-        <label className="check">
+      {/* Small in-panel toolbar since tile header hides module header */}
+      <div className="centered" style={{ marginBottom: 8 }}>
+        <label className="check" style={{ gap: 8 }}>
           <input
             type="checkbox"
             checked={listening}
@@ -101,11 +115,19 @@ export default function ChromaticTunerModule() {
         </label>
       </div>
 
-      <div className="row center">
+      {/* Centered tuner */}
+      <div className="centered" style={{ marginTop: 4 }}>
         <Tuner hz={hz} />
       </div>
 
-      <p className="muted" style={{ textAlign: "center" }}>
+      {/* Mic meter under tuner */}
+      <div className="mic-row" style={{ justifyContent: "center" }}>
+        <div className="mic-meter" title="Input level" style={{ width: 360, maxWidth: "90%" }}>
+          <div className="mic-level" style={{ width: `${Math.round(level * 100)}%` }} />
+        </div>
+      </div>
+
+      <p className="muted centered" style={{ marginTop: 8 }}>
         The tuner shows how close the incoming sound is to the nearest equal-tempered pitch.
       </p>
     </div>
