@@ -5,9 +5,11 @@ import ChromaticTunerModule from "./modules/ChromaticTunerModule";
 import SettingsDialog from "./components/SettingsDialog"; // reuse as a simple help modal
 import ClaveModule from "./modules/ClaveModule";
 import SolfegeTrainerModule from "./modules/SolfegeTrainerModule";
+import ToneGeneratorModule from "./modules/ToneGeneratorModule";
+
 
 import "./styles/index.css";
-type ModuleKey = "quiz" | "tuner" | "metro" | "clave" | "solfege";
+type ModuleKey = "quiz" | "tuner" | "metro" | "clave" | "solfege" | "tone";
 
 type ModuleDef = {
   title: string;
@@ -22,6 +24,7 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
   metro: { title: "Metronome",       icon: "🥁", render: () => <MetronomeModule /> },
   clave: { title: "Clave",           icon: "🪘", render: () => <ClaveModule /> },
   solfege: { title: "Solfege Trainer", icon: "🎤", render: () => <SolfegeTrainerModule /> },
+  tone:   { title: "Tone Generator", icon: "🎛️", render: () => <ToneGeneratorModule /> },
 };
 
 
