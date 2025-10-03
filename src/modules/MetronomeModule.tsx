@@ -49,9 +49,9 @@ export default function MetronomeModule() {
     return clamp(v, MIN_BPM, MAX_BPM);
   });
   // Separate input string so the user can clear it while typing
-  const [bpmInput, setBpmInput] = React.useState<string>(() => String(
-    clamp(Number(localStorage.getItem("metro.bpm") ?? 100), MIN_BPM, MAX_BPM)
-  ));
+  const [bpmInput, setBpmInput] = React.useState<string>(() =>
+    String(clamp(Number(localStorage.getItem("metro.bpm") ?? 100), MIN_BPM, MAX_BPM))
+  );
 
   const [sig, setSig] = React.useState<TimeSig>(() => {
     try {
@@ -83,7 +83,7 @@ export default function MetronomeModule() {
   // seconds per beat (denominator note = beat)
   const spb = React.useMemo(() => (60 / bpm) * (4 / sig.den), [bpm, sig.den]);
 
-  // If we are the global owner and timing changes while running, update barLen.
+  // If we are the global owner and timing changes while running, update barLen, then realign.
   React.useEffect(() => {
     if (!running) return;
     const sync = getGlobalSync();
@@ -264,20 +264,11 @@ export default function MetronomeModule() {
 
   return (
     <div className="panel">
-      <div className="panel-header">
-        <div className="panel-title">Metronome</div>
-        <div className="controls row center">
-          <button className="button" onClick={() => (running ? stop() : start())}>
-            {running ? "Stop" : "Start"}
-          </button>
-        </div>
-      </div>
-
       {/* Controls (centered, stacked) */}
-      <div className="met-controls centered">
+      <div className="met-controls centered" style={{ marginTop: 8 }}>
         <div className="met-field">
           <label>Tempo</label>
-          <div className="row center" style={{ gap: 10 }}>
+          <div className="row center" style={{ gap: 10, flexWrap: "wrap" }}>
             <input
               className="input"
               type="text"
@@ -294,6 +285,18 @@ export default function MetronomeModule() {
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitBpm(); } }}
               style={{ width: 110, textAlign: "center", fontWeight: 700, fontSize: 18 }}
             />
+
+            {/* Single toggle transport button */}
+            <button
+              className="icon-btn"
+              onClick={() => (running ? stop() : start())}
+              title={running ? "Stop (Space)" : "Start (Space)"}
+              aria-label={running ? "Stop metronome" : "Start metronome"}
+            >
+              {running ? "⏹" : "▶"}
+            </button>
+
+            {/* Big TAP button */}
             <button className="button tap-big" onClick={tap} title="Tap tempo (T)">
               Tap
             </button>

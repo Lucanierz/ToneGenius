@@ -115,3 +115,9 @@
   font-weight: 800;
   letter-spacing: .2px;
 }
+/* Footer right side: help + theme buttons */
+.drawer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

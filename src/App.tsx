@@ -2,6 +2,7 @@ import React from "react";
 import IntervalQuiz from "./components/IntervalQuiz";
 import MetronomeModule from "./modules/MetronomeModule";
 import ChromaticTunerModule from "./modules/ChromaticTunerModule";
+import SettingsDialog from "./components/SettingsDialog"; // reuse as a simple help modal
 import "./styles/index.css";
 
 type ModuleKey = "quiz" | "tuner" | "metro";
@@ -17,6 +18,9 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
   tuner: { title: "Chromatic Tuner", icon: "🎚️", render: () => <ChromaticTunerModule /> },
   metro: { title: "Metronome",       icon: "🥁", render: () => <MetronomeModule /> },
 };
+
+// Singleton modules: only one tile allowed
+const SINGLETONS = new Set<ModuleKey>(["quiz", "tuner"]);
 
 type Tile = { id: string; key: ModuleKey };
 
@@ -58,6 +62,14 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">(loadTheme);
   const [tiles, setTiles] = React.useState<Tile[]>(loadTiles);
+  const [helpOpen, setHelpOpen] = React.useState(false);
+
+  // pointer-drag DnD (overlay indicator)
+  const canvasRef = React.useRef<HTMLElement | null>(null);
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [indicatorTop, setIndicatorTop] = React.useState<number | null>(null);
+  const [targetIndex, setTargetIndex] = React.useState<number | null>(null);
+  const HYSTERESIS_PX = 10;
 
   React.useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -69,6 +81,8 @@ export default function App() {
   }, [tiles]);
 
   function addModule(key: ModuleKey) {
+    // block adding a duplicate if this is a singleton and already present
+    if (SINGLETONS.has(key) && tiles.some((t) => t.key === key)) return;
     setTiles((prev) => [...prev, { id: makeId(key), key }]);
   }
   function removeTile(id: string) {
@@ -78,14 +92,7 @@ export default function App() {
     setTheme((t) => (t === "light" ? "dark" : "light"));
   }
 
-  /* ======= Pointer-based drag & drop (mobile + desktop) ======= */
-  const canvasRef = React.useRef<HTMLElement | null>(null);
-  const [draggingId, setDraggingId] = React.useState<string | null>(null);
-  const [indicatorTop, setIndicatorTop] = React.useState<number | null>(null);
-  const [targetIndex, setTargetIndex] = React.useState<number | null>(null);
-
-  const HYSTERESIS_PX = 10;
-
+  // drag helpers
   function measureGaps() {
     const canvas = canvasRef.current!;
     const tilesEls = Array.from(canvas.querySelectorAll<HTMLElement>(".tile"));
@@ -103,18 +110,13 @@ export default function App() {
       }
       gapsDocY.push(rects[rects.length - 1].bottom + window.scrollY);
     }
-
-    function toCanvasTop(docY: number) {
-      return docY - canvasTopDoc;
-    }
+    const toCanvasTop = (docY: number) => docY - canvasTopDoc;
     return { gapsDocY, toCanvasTop };
   }
-
-  function nearestGapIndex(docY: number, prevIdx: number | null, prevDocY: number | null, gapsDocY: number[]) {
-    let bestIdx = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < gapsDocY.length; i++) {
-      const d = Math.abs(gapsDocY[i] - docY);
+  function nearestGapIndex(docY: number, prevIdx: number | null, prevDocY: number | null, gaps: number[]) {
+    let bestIdx = 0, bestDist = Infinity;
+    for (let i = 0; i < gaps.length; i++) {
+      const d = Math.abs(gaps[i] - docY);
       if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
     if (prevIdx != null && prevDocY != null) {
@@ -141,7 +143,6 @@ export default function App() {
     document.body.style.userSelect = "none";
     document.body.style.touchAction = "none";
   }
-
   function onDragMove(e: React.PointerEvent) {
     if (!dragDataRef.current || draggingId == null) return;
     const { lastIdx, lastDocY } = dragDataRef.current;
@@ -156,13 +157,11 @@ export default function App() {
     }
     dragDataRef.current.lastDocY = docY;
   }
-
   function endDrag() {
     if (!dragDataRef.current || draggingId == null || targetIndex == null) {
       cleanupDrag();
       return;
     }
-
     const fromId = dragDataRef.current.startId;
     const toIdxRaw = targetIndex;
 
@@ -180,7 +179,6 @@ export default function App() {
 
     cleanupDrag();
   }
-
   function cleanupDrag() {
     setDraggingId(null);
     setIndicatorTop(null);
@@ -200,9 +198,7 @@ export default function App() {
           onClick={() => setDrawerOpen((v) => !v)}
           title="Modules"
         >
-          <span />
-          <span />
-          <span />
+          <span /><span /><span />
         </button>
         <div className="brand">Modules</div>
         <div style={{ width: 40 }} />
@@ -218,12 +214,21 @@ export default function App() {
         <ul className="drawer-list">
           {(Object.keys(MODULES) as ModuleKey[]).map((k) => {
             const def = MODULES[k];
+            const already = tiles.some((t) => t.key === k);
+            const isSingleton = SINGLETONS.has(k);
+            const disabled = isSingleton && already;
             return (
               <li key={k}>
-                <button className="drawer-item" onClick={() => addModule(k)} title={`Add ${def.title}`}>
+                <button
+                  className={`drawer-item ${disabled ? "added" : ""}`}
+                  onClick={() => !disabled && addModule(k)}
+                  title={disabled ? "Already added" : `Add ${def.title}`}
+                  disabled={disabled}
+                  aria-disabled={disabled}
+                >
                   <span className="icon" aria-hidden>{def.icon}</span>
                   <span className="label">{def.title}</span>
-                  <span className="check" aria-hidden>＋</span>
+                  <span className="check" aria-hidden>{disabled ? "✓" : "＋"}</span>
                 </button>
               </li>
             );
@@ -232,7 +237,15 @@ export default function App() {
 
         <div className="drawer-foot">
           <span className="muted">Click to add tiles</span>
-          <div className="theme-toggle">
+          <div className="drawer-actions">
+            <button
+              className="theme-btn"
+              onClick={() => setHelpOpen(true)}
+              title="About & Help"
+              aria-label="About and help"
+            >
+              ❓ Help
+            </button>
             <button
               className="theme-btn"
               onClick={toggleTheme}
@@ -265,12 +278,9 @@ export default function App() {
             const isDragging = draggingId === t.id;
             return (
               <section className={`tile ${isDragging ? "dragging" : ""}`} key={t.id}>
-                {/* NEW: Tile header bar with title on the left, controls on the right */}
                 <div className="tile-bar">
                   <div className="tile-title">
-                    <span className="tile-icon" aria-hidden>
-                      {MODULES[t.key].icon}
-                    </span>
+                    <span className="tile-icon" aria-hidden>{MODULES[t.key].icon}</span>
                     {MODULES[t.key].title}
                   </div>
                   <div className="tile-controls">
@@ -291,20 +301,63 @@ export default function App() {
                       onPointerUp={endDrag}
                       onPointerCancel={cleanupDrag}
                     >
-                      <span className="grip" />
-                      <span className="grip" />
-                      <span className="grip" />
+                      <span className="grip" /><span className="grip" /><span className="grip" />
                     </div>
                   </div>
                 </div>
 
-                {/* Render module content; we hide its internal header via CSS */}
+                {/* Render module content; internal headers hidden via CSS */}
                 {Def.render()}
               </section>
             );
           })
         )}
       </main>
+
+      {/* Help modal */}
+      <SettingsDialog title="About & Help" open={helpOpen} onClose={() => setHelpOpen(false)}>
+        <div className="settings-grid">
+          <section className="settings-section">
+            <h4>What is this?</h4>
+            <p className="muted">
+              A modular practice app. Use the menu (☰) to add tiles to your view. You can have multiple
+              <strong> Metronome</strong> tiles, but only one <strong>Interval Quiz</strong> and one
+              <strong> Chromatic Tuner</strong>.
+            </p>
+          </section>
+
+          <div className="settings-divider" />
+
+          <section className="settings-section">
+            <h4>Managing tiles</h4>
+            <ul>
+              <li>Drag the <em>grip</em> ▮▮▮ to reorder tiles.</li>
+              <li>Click ✕ to remove a tile.</li>
+              <li>Theme toggle (☀️/🌙) is at the bottom of the drawer.</li>
+            </ul>
+          </section>
+
+          <div className="settings-divider" />
+
+          <section className="settings-section">
+            <h4>Shortcuts</h4>
+            <ul>
+              <li><strong>Metronome:</strong> Space = start/stop, T = tap tempo</li>
+              <li><strong>Quiz:</strong> N = next, S = settings</li>
+            </ul>
+          </section>
+
+          <div className="settings-divider" />
+
+          <section className="settings-section">
+            <h4>Sync</h4>
+            <p className="muted">
+              Metronomes align their downbeat “1”. When you start another metronome, it begins on the next bar of
+              any running one.
+            </p>
+          </section>
+        </div>
+      </SettingsDialog>
     </div>
   );
 }
