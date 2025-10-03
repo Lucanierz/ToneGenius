@@ -239,3 +239,45 @@ export function playPitchClass(pc: number, octave = 4, ms = 700, type: Oscillato
     try { gain.disconnect(); } catch {}
   };
 }
+
+/** Start a sustained tone for a pitch class. Returns a stop() function. */
+export function startPitchClass(
+  pc: number,
+  octave = 4,
+  type: OscillatorType = "sine",
+  gainDb = -6,
+  attackMs = 12,
+  releaseMs = 80
+): () => void {
+  const ctx = getAudioContext();
+  const midi = (octave + 1) * 12 + pc; // C4=60
+  const freq = midiToFreq(midi);
+
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.value = freq;
+
+  const gain = ctx.createGain();
+  const level = Math.pow(10, gainDb / 20);
+  const now = ctx.currentTime;
+
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(level, now + attackMs / 1000);
+
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+
+  let stopped = false;
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    const t = ctx.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setTargetAtTime(0, t, releaseMs / 1000 / 3); // quick release
+    try { osc.stop(t + releaseMs / 1000 + 0.02); } catch {}
+    try { osc.disconnect(); } catch {}
+    try { gain.disconnect(); } catch {}
+  }
+
+  return stop;
+}

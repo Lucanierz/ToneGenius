@@ -14,7 +14,7 @@ import SettingsDialog from "./SettingsDialog";
 import ThemeSelector from "./ThemeSelector";
 import MicAnswer from "./MicAnswer";
 import Tuner from "./Tuner";
-import { playPitchClass } from "../utils/audio";
+import { startPitchClass } from "../utils/audio";
 
 type Direction = "up" | "down";
 type DirectionSetting = "up" | "down" | "both";
@@ -44,7 +44,7 @@ function makeQuestion(allowedIds: Set<string>, dirSetting: DirectionSetting): Qu
 }
 
 // fast auto-advance on correct
-const AUTO_NEXT_MS = 0;
+const AUTO_NEXT_MS = 200;
 
 type Stats = {
   correct: number; total: number; streak: number; best: number;
@@ -86,6 +86,7 @@ export default function IntervalQuiz() {
   const [qStartedAt, setQStartedAt] = React.useState<number>(() => Date.now());
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
+  // UI: wrong flash/shake
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   // mic + playback settings (persisted)
@@ -103,9 +104,10 @@ export default function IntervalQuiz() {
   });
   React.useEffect(() => { localStorage.setItem("intervalQuiz.direction", dirSetting); }, [dirSetting]);
 
-  // tuner + play suppression
+  // tuner + mic suppression while playing
   const [lastPitchHz, setLastPitchHz] = React.useState<number | null>(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
+  const playStopRef = React.useRef<null | (() => void)>(null);
 
   // accept window config
   const HOLD_MS = 500;
@@ -128,6 +130,7 @@ export default function IntervalQuiz() {
     setDisabled(false);
     setLastPitchHz(null);
     setIsPlaying(false);
+    // keep focus in the box
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -186,7 +189,7 @@ export default function IntervalQuiz() {
       return false;
     }
     function onKey(e: KeyboardEvent) {
-      if (isTypingTarget(e.target)) return; // typing 'n' or 's' is allowed
+      if (isTypingTarget(e.target)) return; // typing 'n'/'s' is allowed in input; handled below
       const k = e.key.toLowerCase();
       if (k === "n") next();
       if (k === "s") setIsSettingsOpen((v) => !v);
@@ -207,16 +210,22 @@ export default function IntervalQuiz() {
     registerAttempt(true, elapsed);
   }, [question, disabled, qStartedAt]);
 
-  // play target (suspend mic while playing)
-  function playTarget() {
-    if (!question) return;
-    const dur = 800; // ms
+  // hold-to-play target (suspend mic while held)
+  function startPlayTarget() {
+    if (!question || isPlaying) return;
     setIsPlaying(true);
-    const stop = playPitchClass(question.answerPc, playOctave, dur, wave);
-    window.setTimeout(() => {
-      try { stop && stop(); } catch {}
+    try {
+      playStopRef.current = startPitchClass(question.answerPc, playOctave, wave);
+    } catch {
       setIsPlaying(false);
-    }, dur + 40);
+    }
+  }
+  function stopPlayTarget() {
+    if (playStopRef.current) {
+      try { playStopRef.current(); } catch {}
+      playStopRef.current = null;
+    }
+    setIsPlaying(false);
   }
 
   const dirArrow = question?.dir === "down" ? "↓" : "↑";
@@ -272,15 +281,28 @@ export default function IntervalQuiz() {
               value={input}
               onChange={(e) => setInput(sanitizeNoteInput(e.target.value))}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                const k = e.key.toLowerCase();
+
+                // 1) Primary actions
+                if (k === "enter") {
                   e.preventDefault();
                   submit();
+                  return;
                 }
-                // Prevent typing more than 2 chars or invalid chars in realtime
-                const key = e.key;
-                if (key.length === 1) {
-                  const tentative = sanitizeNoteInput(input + key);
-                  // If adding this char doesn't change or exceeds 2 chars, block it and handle sanitize onChange anyway
+                if (k === "s") {
+                  e.preventDefault();            // don't type 's'
+                  setIsSettingsOpen(true);       // open Settings even while focused
+                  return;
+                }
+                if (k === "n") {
+                  e.preventDefault();            // don't type 'n'
+                  next();                        // allow Next while focused
+                  return;
+                }
+
+                // 2) Realtime guard so field never exceeds 2 chars or invalid pattern
+                if (e.key.length === 1) {
+                  const tentative = sanitizeNoteInput(input + e.key);
                   if (tentative.length > 2) {
                     e.preventDefault();
                   }
@@ -298,11 +320,30 @@ export default function IntervalQuiz() {
             <button
               type="button"
               className="button"
-              onClick={playTarget}
-              title="Play target pitch (chosen octave)"
-              disabled={isPlaying}
+              title="Hold to play target pitch"
+              aria-pressed={isPlaying}
+              // Mouse
+              onMouseDown={startPlayTarget}
+              onMouseUp={stopPlayTarget}
+              onMouseLeave={stopPlayTarget}
+              // Touch
+              onTouchStart={(e) => { e.preventDefault(); startPlayTarget(); }}
+              onTouchEnd={stopPlayTarget}
+              // Keyboard (Space/Enter)
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  startPlayTarget();
+                }
+              }}
+              onKeyUp={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  stopPlayTarget();
+                }
+              }}
             >
-              ▶ Play target
+              ▶ Hold to play
             </button>
           </div>
 
