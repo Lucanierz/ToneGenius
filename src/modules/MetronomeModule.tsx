@@ -8,19 +8,51 @@ const MIN_BPM = 30;
 const MAX_BPM = 300;
 
 // Tap-tempo tuning
-const TAP_RESET_MS = 1200;      // if pause between taps > 1.2s, start fresh
-const TAP_MIN_S = 0.18;         // ignore taps faster than ~333 BPM (/4)
-const TAP_MAX_S = 2.5;          // ignore taps slower than ~24 BPM (/4)
-const TAP_DEVIATE_FRAC = 0.35;  // snap if new tap deviates >35% from recent average
-const TAP_WINDOW = 4;           // keep last N intervals for smoothing
+const TAP_RESET_MS = 1200;
+const TAP_MIN_S = 0.18;
+const TAP_MAX_S = 2.5;
+const TAP_DEVIATE_FRAC = 0.35;
+const TAP_WINDOW = 4;
+
+// ---- Global downbeat sync (shared across module instances) -------------------
+type GlobalSync = {
+  anchor: number | null; // AudioContext time of a reference downbeat "1"
+  barLen: number;        // seconds per bar (based on the *owner* instance)
+  ownerId: string | null;
+};
+function getGlobalSync(): GlobalSync {
+  const w = window as any;
+  if (!w.__metroSync) {
+    w.__metroSync = { anchor: null, barLen: 0, ownerId: null } as GlobalSync;
+  }
+  return w.__metroSync as GlobalSync;
+}
+function makeInstanceId() {
+  return `metro-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+function nextGlobalDownbeat(ctxTime: number): number | null {
+  const s = getGlobalSync();
+  if (s.anchor == null || s.barLen <= 0) return null;
+  const n = Math.ceil((ctxTime - s.anchor) / s.barLen);
+  return s.anchor + n * s.barLen;
+}
+// -----------------------------------------------------------------------------
 
 export default function MetronomeModule() {
+  const instanceIdRef = React.useRef<string>(makeInstanceId());
+
   const [running, setRunning] = React.useState(false);
+
   const [bpm, setBpm] = React.useState<number>(() => {
     const s = localStorage.getItem("metro.bpm");
     const v = s ? Number(s) : 100;
     return clamp(v, MIN_BPM, MAX_BPM);
   });
+  // Separate input string so the user can clear it while typing
+  const [bpmInput, setBpmInput] = React.useState<string>(() => String(
+    clamp(Number(localStorage.getItem("metro.bpm") ?? 100), MIN_BPM, MAX_BPM)
+  ));
+
   const [sig, setSig] = React.useState<TimeSig>(() => {
     try {
       const raw = localStorage.getItem("metro.sig");
@@ -32,8 +64,12 @@ export default function MetronomeModule() {
   // drives the dot highlight
   const [activeBeat, setActiveBeat] = React.useState<number>(-1);
 
-  React.useEffect(() => { localStorage.setItem("metro.bpm", String(bpm)); }, [bpm]);
-  React.useEffect(() => { localStorage.setItem("metro.sig", JSON.stringify(sig)); }, [sig]);
+  React.useEffect(() => {
+    try { localStorage.setItem("metro.bpm", String(bpm)); } catch {}
+  }, [bpm]);
+  React.useEffect(() => {
+    try { localStorage.setItem("metro.sig", JSON.stringify(sig)); } catch {}
+  }, [sig]);
 
   // scheduler
   const schedulerRef = React.useRef<number | null>(null);
@@ -46,6 +82,19 @@ export default function MetronomeModule() {
 
   // seconds per beat (denominator note = beat)
   const spb = React.useMemo(() => (60 / bpm) * (4 / sig.den), [bpm, sig.den]);
+
+  // If we are the global owner and timing changes while running, update barLen.
+  React.useEffect(() => {
+    if (!running) return;
+    const sync = getGlobalSync();
+    if (sync.ownerId === instanceIdRef.current) {
+      sync.barLen = spb * sig.num;
+    }
+    // restart to place clicks on the new grid cleanly
+    stop(false);
+    start(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spb, sig.num]);
 
   function scheduleClick(when: number, beatIndex: number) {
     const ctx = getAudioContext();
@@ -91,30 +140,52 @@ export default function MetronomeModule() {
     schedulerRef.current = window.setTimeout(schedulerTick, 25);
   }
 
-  function start() {
+  function start(setGlobalOwnerIfNone = true) {
     const ctx = getAudioContext();
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    nextTimeRef.current = ctx.currentTime + 0.06; // small offset
+
+    const sync = getGlobalSync();
+    const myBarLen = spb * sig.num;
+
+    // If a global anchor exists, start on next global "1".
+    // Otherwise, we become the owner and define the anchor.
+    let startAt: number;
+    if (sync.anchor != null && sync.barLen > 0) {
+      const nd = nextGlobalDownbeat(ctx.currentTime + 0.02) ?? (ctx.currentTime + 0.06);
+      startAt = nd;
+    } else {
+      startAt = ctx.currentTime + 0.06;
+      if (setGlobalOwnerIfNone) {
+        sync.anchor = startAt;
+        sync.barLen = myBarLen;
+        sync.ownerId = instanceIdRef.current;
+      }
+    }
+
+    // Initialize local scheduler aligned to a downbeat
+    nextTimeRef.current = startAt;
     beatRef.current = 0;
     setActiveBeat(0);
     schedulerTick();
     setRunning(true);
   }
-  function stop() {
+
+  function stop(clearGlobalIfOwner = true) {
     if (schedulerRef.current != null) clearTimeout(schedulerRef.current);
     schedulerRef.current = null;
     setRunning(false);
     setActiveBeat(-1);
+
+    if (clearGlobalIfOwner) {
+      const sync = getGlobalSync();
+      if (sync.ownerId === instanceIdRef.current) {
+        sync.anchor = null;
+        sync.barLen = 0;
+        sync.ownerId = null;
+      }
+    }
   }
   React.useEffect(() => () => stop(), []);
-
-  // Restart grid when timing changes (bpm or beats per bar)
-  React.useEffect(() => {
-    if (!running) return;
-    stop();
-    start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spb, sig.num]);
 
   // Tap tempo (snappy)
   function tap() {
@@ -143,6 +214,7 @@ export default function MetronomeModule() {
       // Big change: snap immediately
       const snappedBpm = clamp(Math.round((60 / delta) * (sig.den / 4)), MIN_BPM, MAX_BPM);
       setBpm(snappedBpm);
+      setBpmInput(String(snappedBpm));
       tapsRef.current = [delta];
       return;
     }
@@ -165,6 +237,7 @@ export default function MetronomeModule() {
 
     const tappedBpm = clamp(Math.round((60 / wavg) * (sig.den / 4)), MIN_BPM, MAX_BPM);
     setBpm(tappedBpm);
+    setBpmInput(String(tappedBpm));
   }
 
   // keyboard: Space = start/stop, T = tap
@@ -178,6 +251,16 @@ export default function MetronomeModule() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [running]);
+
+  // ---- Tempo input handlers (allow empty) ------------------------------------
+  function commitBpm() {
+    const n = Number(bpmInput);
+    if (!Number.isFinite(n)) { setBpmInput(String(bpm)); return; }
+    const clamped = clamp(Math.round(n), MIN_BPM, MAX_BPM);
+    setBpm(clamped);
+    setBpmInput(String(clamped));
+  }
+  // ----------------------------------------------------------------------------
 
   return (
     <div className="panel">
@@ -197,11 +280,18 @@ export default function MetronomeModule() {
           <div className="row center" style={{ gap: 10 }}>
             <input
               className="input"
-              type="number"
-              min={MIN_BPM}
-              max={MAX_BPM}
-              value={bpm}
-              onChange={(e) => setBpm(clamp(Number(e.target.value || 0), MIN_BPM, MAX_BPM))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={bpmInput}
+              placeholder={`${bpm}`}
+              onChange={(e) => {
+                // allow empty or digits only
+                const raw = e.target.value;
+                if (raw === "" || /^[0-9]{0,3}$/.test(raw)) setBpmInput(raw);
+              }}
+              onBlur={commitBpm}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitBpm(); } }}
               style={{ width: 110, textAlign: "center", fontWeight: 700, fontSize: 18 }}
             />
             <button className="button tap-big" onClick={tap} title="Tap tempo (T)">
