@@ -1,3 +1,4 @@
+// src/components/IntervalQuiz.tsx
 import React from "react";
 import { INTERVALS } from "../data/intervals";
 import {
@@ -53,7 +54,7 @@ const STATS_STORAGE_KEY = "intervalQuizStatsV6";
 function loadStats(): Stats | null {
   try { const raw = localStorage.getItem(STATS_STORAGE_KEY); return raw ? JSON.parse(raw) as Stats : null; } catch { return null; }
 }
-function saveStats(s: Stats) { try { localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(s)); } catch {} }
+function saveStats(s: Stats) { try { localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(s)); } catch { } }
 function msToSec(ms: number) { return (ms / 1000).toFixed(1); }
 
 // sanitize input to 1 note + optional accidental
@@ -113,15 +114,9 @@ export default function IntervalQuiz() {
   );
   React.useEffect(() => { saveStats(stats); }, [stats]);
 
-  // reliable focus helper
-  const focusInputSoon = React.useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select?.();
-      });
-    });
-  }, []);
+  function focusInputSoon() {
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
 
   function startNewQuestion() {
     if (selected.size === 0) {
@@ -137,9 +132,8 @@ export default function IntervalQuiz() {
     focusInputSoon();
   }
 
-  React.useEffect(() => { startNewQuestion(); }, []);                       // mount
-  React.useEffect(() => { startNewQuestion(); }, [selected, dirSetting]);   // selection/direction change
-  React.useEffect(() => { if (question) focusInputSoon(); }, [question, focusInputSoon]); // refocus on new question
+  React.useEffect(() => { startNewQuestion(); }, []);
+  React.useEffect(() => { startNewQuestion(); }, [selected, dirSetting]);
 
   function registerAttempt(ok: boolean, elapsed: number) {
     setStats((s) => {
@@ -201,7 +195,7 @@ export default function IntervalQuiz() {
   const dirArrow = question?.dir === "down" ? "↓" : "↑";
 
   // mic callbacks
-  const handleMicHeard = React.useCallback((_heardPc: number, _ok: boolean) => {}, []);
+  const handleMicHeard = React.useCallback((_heardPc: number, _ok: boolean) => { }, []);
   const handleMicCorrect = React.useCallback(() => {
     if (!question || disabled) return;
     const elapsed = Date.now() - qStartedAt;
@@ -220,7 +214,7 @@ export default function IntervalQuiz() {
   }
   function stopPlayTarget() {
     if (playStopRef.current) {
-      try { playStopRef.current(); } catch {}
+      try { playStopRef.current(); } catch { }
       playStopRef.current = null;
     }
     setIsPlaying(false);
@@ -228,16 +222,17 @@ export default function IntervalQuiz() {
 
   return (
     <div className="panel">
-      {/* Header */}
-      <div className="panel-header">
-        <div className="panel-title">Interval Quiz</div>
+      {/* Tiny tool bar inside the panel (since external tile header hides module header) */}
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 6 }}>
         <button
           type="button"
           className="icon-btn"
           aria-label="Open settings"
           title="Settings (S)"
           onClick={() => setIsSettingsOpen(true)}
-        >⚙️</button>
+        >
+          ⚙️
+        </button>
       </div>
 
       {/* Compact stats bar */}
@@ -268,10 +263,9 @@ export default function IntervalQuiz() {
               <div className="hero-interval">
                 <span className="hero-name">{question.intervalId}</span>
                 <span
-                  className="dir-arrow"
+                  className={`hero-arrow ${question.dir === "down" ? "down" : "up"}`}
                   title={question.dir === "down" ? "Down" : "Up"}
                   aria-hidden
-                  style={{ marginLeft: 8 }}
                 >
                   {dirArrow}
                 </span>
@@ -367,7 +361,7 @@ export default function IntervalQuiz() {
           <section className="settings-section">
             <h4>Interval direction</h4>
             <div className="row">
-              {(["up","down","both"] as DirectionSetting[]).map(opt => (
+              {(["up", "down", "both"] as DirectionSetting[]).map(opt => (
                 <label key={opt} className="check" style={{ gap: 8 }}>
                   <input
                     type="radio"
@@ -412,7 +406,7 @@ export default function IntervalQuiz() {
                   value={playOctave}
                   onChange={(e) => setPlayOctave(Number(e.target.value))}
                 >
-                  {[2,3,4,5,6].map((o) => <option key={o} value={o}>{o}</option>)}
+                  {[2, 3, 4, 5, 6].map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </label>
               <label className="check" style={{ gap: 8 }}>
@@ -422,7 +416,7 @@ export default function IntervalQuiz() {
                   value={wave}
                   onChange={(e) => setWave(e.target.value as OscillatorType)}
                 >
-                  {["sine","triangle","square","sawtooth"].map((w) => (
+                  {["sine", "triangle", "square", "sawtooth"].map((w) => (
                     <option key={w} value={w}>{w}</option>
                   ))}
                 </select>
