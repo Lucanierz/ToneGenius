@@ -3,12 +3,15 @@ import React from "react";
 import IntervalQuiz from "./components/IntervalQuiz";
 import ChromaticTunerModule from "./modules/ChromaticTunerModule";
 import { applyTheme, getSavedTheme, toggleTheme, type Theme } from "./utils/theme";
+import MetronomeModule from "./modules/MetronomeModule";
 
-type ModuleKey = "quiz" | "tuner";
+
+type ModuleKey = "quiz" | "tuner" | "metro";
 
 const MODULES: Record<ModuleKey, { title: string; component: React.ReactNode }> = {
-  quiz:   { title: "Interval Quiz", component: <IntervalQuiz /> },
-  tuner:  { title: "Chromatic Tuner", component: <ChromaticTunerModule /> },
+  quiz: { title: "Interval Quiz", component: <IntervalQuiz /> },
+  tuner: { title: "Chromatic Tuner", component: <ChromaticTunerModule /> },
+  metro: { title: "Metronome", component: <MetronomeModule /> }, // ⬅️ here
 };
 
 export default function App() {
@@ -69,6 +72,7 @@ export default function App() {
                 <span>Interval Quiz</span>
               </button>
             </li>
+
             <li>
               <button
                 className={`drawer-item ${mod === "tuner" ? "active" : ""}`}
@@ -78,7 +82,18 @@ export default function App() {
                 <span>Chromatic Tuner</span>
               </button>
             </li>
+
+            <li>
+              <button
+                className={`drawer-item ${mod === "metro" ? "active" : ""}`}
+                onClick={() => select("metro")}
+              >
+                <span className="icon" aria-hidden>🥁</span>
+                <span>Metronome</span>
+              </button>
+            </li>
           </ul>
+
 
           <div className="drawer-footer">
             <button

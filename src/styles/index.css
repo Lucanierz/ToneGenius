@@ -2,8 +2,7 @@
 @import "./base.css";
 @import "./layout.css";
 @import "./forms.css";
-/* New: modal styles */
-@import "./modal.css";
 @import "./quiz.css";
 @import "./tuner.css";
+@import "./metronome.css";  /* ⬅️ add this */
 @import "./drawer.css";
