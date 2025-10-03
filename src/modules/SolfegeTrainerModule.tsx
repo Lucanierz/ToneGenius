@@ -22,7 +22,7 @@ const DEGREES: Degree[] = [
   { id: "b3", name: "Me", semitones: 3 },
   { id: "3",  name: "Mi", semitones: 4 },
   { id: "4",  name: "Fa", semitones: 5 },
-  { id: "#4", name: "Fi", semitones: 6 }, // (= b5)
+  { id: "#4", name: "Fi", semitones: 6 },
   { id: "5",  name: "So", semitones: 7 },
   { id: "b6", name: "Le", semitones: 8 },
   { id: "6",  name: "La", semitones: 9 },
@@ -158,7 +158,6 @@ export default function SolfegeTrainerModule() {
 
   // On correct via mic
   const handleMicCorrect = React.useCallback(() => {
-    // brief lock then new target
     setTimeout(() => pickTarget(), 180);
   }, []);
 
@@ -202,77 +201,84 @@ export default function SolfegeTrainerModule() {
 
   return (
     <div className="panel">
-      {/* Inline header tools (gear for settings) */}
-      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 6 }}>
+      {/* Settings button (centered) */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
         <button className="icon-btn" onClick={() => setOpenSettings(true)} title="Settings" aria-label="Open settings">
           ⚙️
         </button>
       </div>
 
-      {/* ===== Target card ===== */}
+      {/* ===== Target display: centered step name, then root & target below (centered) ===== */}
       {target ? (
         <>
-          <div className="question-hero" style={{ marginTop: 2 }}>
-            <div className="hero-block">
-              <div className="hero-label">Solfege</div>
-              <div className="hero-note">{target.name}</div>
+          {/* Big centered solfege name */}
+          <div className="centered" style={{ marginTop: 6 }}>
+            <div className="hero-label" style={{ marginBottom: 6 }}>Solfege</div>
+            <div className="hero-note" style={{ fontSize: "clamp(36px, 8vw, 72px)" }}>
+              {target.name}
             </div>
+          </div>
 
-            {/* REPLACED "Function" WITH ACTUAL TARGET NOTE */}
-            <div className="hero-block">
-              <div className="hero-label">Target Note</div>
-              <div className="hero-interval">
-                <span className="hero-name">
-                  {(PC_TO_NAME as Record<number,string>)[target.answerPc]}
-                </span>
+          {/* Root & Target (centered row inside a full-width flex wrapper) */}
+          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+            <div className="row center" style={{ gap: 24, marginTop: 12, flexWrap: "wrap" }}>
+              <div className="hero-block" style={{ minWidth: 160, textAlign: "center" }}>
+                <div className="hero-label">Root (1)</div>
+                <div className="hero-note">{(PC_TO_NAME as Record<number,string>)[rootPc]}</div>
+              </div>
+              <div className="hero-block" style={{ minWidth: 160, textAlign: "center" }}>
+                <div className="hero-label">Target Note</div>
+                <div className="hero-interval" style={{ justifyContent: "center" }}>
+                  <span className="hero-name">
+                    {(PC_TO_NAME as Record<number,string>)[target.answerPc]}
+                  </span>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="hero-block">
-              <div className="hero-label">Root (1)</div>
-              <div className="hero-note">{(PC_TO_NAME as Record<number,string>)[rootPc]}</div>
+          <div className="hero-sub muted centered" style={{ marginTop: 8 }}>
+            Sing/play <strong>{target.name}</strong> → {(PC_TO_NAME as Record<number,string>)[target.answerPc]} relative to {(PC_TO_NAME as Record<number,string>)[rootPc]}. Octave doesn’t matter.
+          </div>
+
+          {/* Controls (centered row inside a full-width flex wrapper) */}
+          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+            <div className="row center" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
+              <button
+                className="button"
+                title="Hold to hear the ROOT (1)"
+                aria-pressed={isPlayingRoot}
+                onMouseDown={holdRoot}
+                onMouseUp={stopRoot}
+                onMouseLeave={stopRoot}
+                onTouchStart={(e) => { e.preventDefault(); holdRoot(); }}
+                onTouchEnd={stopRoot}
+              >
+                ▶ Hold: Root (Do)
+              </button>
+              <button
+                className="button"
+                title="Hold to hear the TARGET"
+                aria-pressed={isPlayingTarget}
+                onMouseDown={holdTarget}
+                onMouseUp={stopTarget}
+                onMouseLeave={stopTarget}
+                onTouchStart={(e) => { e.preventDefault(); holdTarget(); }}
+                onTouchEnd={stopTarget}
+              >
+                ▶ Hold: Target ({(PC_TO_NAME as Record<number,string>)[target.answerPc]})
+              </button>
+              <button
+                className="button"
+                onClick={() => pickTarget()}
+                title="Skip to next target"
+              >
+                Next
+              </button>
             </div>
           </div>
 
-          <div className="hero-sub muted centered" style={{ marginTop: 6 }}>
-            Sing/play <strong>{target.name}</strong> (target {(PC_TO_NAME as Record<number,string>)[target.answerPc]}) relative to {(PC_TO_NAME as Record<number,string>)[rootPc]}. Octave doesn’t matter.
-          </div>
-
-          <div className="row center" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
-            <button
-              className="button"
-              title="Hold to hear the ROOT (1)"
-              aria-pressed={isPlayingRoot}
-              onMouseDown={holdRoot}
-              onMouseUp={stopRoot}
-              onMouseLeave={stopRoot}
-              onTouchStart={(e) => { e.preventDefault(); holdRoot(); }}
-              onTouchEnd={stopRoot}
-            >
-              ▶ Hold: Root (Do)
-            </button>
-            <button
-              className="button"
-              title="Hold to hear the TARGET"
-              aria-pressed={isPlayingTarget}
-              onMouseDown={holdTarget}
-              onMouseUp={stopTarget}
-              onMouseLeave={stopTarget}
-              onTouchStart={(e) => { e.preventDefault(); holdTarget(); }}
-              onTouchEnd={stopTarget}
-            >
-              ▶ Hold: Target ({(PC_TO_NAME as Record<number,string>)[target.answerPc]})
-            </button>
-            <button
-              className="button"
-              onClick={() => pickTarget()}
-              title="Skip to next target"
-            >
-              Next
-            </button>
-          </div>
-
-          {/* Mic listener (no tuner here; suggest adding Tuner module) */}
+          {/* Mic listener (silent; no meter UI) + tip (centered) */}
           {micEnabled && (
             <>
               <MicAnswer
@@ -284,7 +290,7 @@ export default function SolfegeTrainerModule() {
                 holdMs={HOLD_MS}
                 centsTolerance={CENTS_TOL}
               />
-              <p className="muted centered" style={{ marginTop: 6 }}>
+              <p className="muted centered" style={{ marginTop: 8 }}>
                 Need visuals? Add the <strong>Chromatic Tuner</strong> module from the menu (☰).
               </p>
             </>
@@ -298,11 +304,11 @@ export default function SolfegeTrainerModule() {
 
       {/* ===== Settings dialog ===== */}
       <SettingsDialog title="Solfege Settings" open={openSettings} onClose={() => setOpenSettings(false)}>
-        <div className="settings-grid">
+        <div className="settings-grid" style={{ justifyItems: "center", textAlign: "center" }}>
           {/* Root selection */}
-          <section className="settings-section">
-            <h4>Root (1) &amp; Microphone</h4>
-            <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+          <section className="settings-section" style={{ width: "100%" }}>
+            <h4 style={{ marginBottom: 8, textAlign: "center" }}>Root (1) &amp; Microphone</h4>
+            <div className="row" style={{ flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
               <label className="check" style={{ gap: 8 }}>
                 <span>Root note</span>
                 <select
@@ -334,17 +340,17 @@ export default function SolfegeTrainerModule() {
                 <span>Use microphone to auto-detect the correct pitch</span>
               </label>
             </div>
-            <p className="muted" style={{ marginTop: 4 }}>
+            <p className="muted" style={{ marginTop: 6, textAlign: "center" }}>
               Hold the “Root” and “Target” buttons to preview tones. While audio plays, the mic is paused.
             </p>
           </section>
 
-          <div className="settings-divider" />
+          <div className="settings-divider" style={{ width: "100%" }} />
 
           {/* Max jump */}
-          <section className="settings-section">
-            <h4>Maximum jump size</h4>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+          <section className="settings-section" style={{ width: "100%" }}>
+            <h4 style={{ marginBottom: 8, textAlign: "center" }}>Maximum jump size</h4>
+            <div className="row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
               <label className="check" style={{ gap: 8 }}>
                 <span>Limit (semitones)</span>
                 <select
@@ -362,14 +368,21 @@ export default function SolfegeTrainerModule() {
             </div>
           </section>
 
-          <div className="settings-divider" />
+          <div className="settings-divider" style={{ width: "100%" }} />
 
           {/* Degree selection + presets */}
-          <section className="settings-section">
-            <h4>Included degrees (functions)</h4>
-            <div className="picker-grid" style={{ gridTemplateColumns: "repeat(6, minmax(84px, 1fr))" }}>
+          <section className="settings-section" style={{ width: "100%" }}>
+            <h4 style={{ marginBottom: 8, textAlign: "center" }}>Included degrees (functions)</h4>
+            <div
+              className="picker-grid"
+              style={{
+                gridTemplateColumns: "repeat(6, minmax(84px, 1fr))",
+                maxWidth: 720,
+                margin: "0 auto"
+              }}
+            >
               {DEGREES.map(d => (
-                <label key={d.id} className="check" style={{ gap: 6 }}>
+                <label key={d.id} className="check" style={{ gap: 6, justifySelf: "center" }}>
                   <input
                     type="checkbox"
                     checked={selected.has(d.id)}
@@ -379,7 +392,7 @@ export default function SolfegeTrainerModule() {
                 </label>
               ))}
             </div>
-            <div className="row" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+            <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
               {Object.entries(PRESETS).map(([label, ids]) => (
                 <button key={label} className="chip-btn" onClick={() => loadPreset(ids)} title={`Load ${label}`}>
                   {label}
