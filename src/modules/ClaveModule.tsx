@@ -9,11 +9,7 @@ import "../styles/clave.css";
  * - Subdivision N ∈ {2,3,4} = metronome clicks every N steps.
  *   => step duration = (60 / BPM) / N
  *   => beats per bar = 12 / N
- *
- * Fixes:
- * - stepsRef ensures live pattern changes take effect immediately (no restart).
- * - hitSound has short, deterministic envelopes and always disconnects.
- * - playhead dots show which step is currently firing.
+ * - Live edits apply instantly; playhead dots show current step.
  */
 
 type Subdiv = 2 | 3 | 4;
@@ -30,14 +26,6 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
-const PRESETS: Record<string, boolean[]> = {
-  "Son (3-2)": [true,false,false,true,false,false,false,true,false,true,false,false],
-  "Rumba (3-2)": [true,false,false,true,false,false,false,true,false,false,true,false],
-  "Bossa (simpl.)": [true,false,false,false,true,false,false,true,false,false,true,false],
-  "All 12": new Array(12).fill(true),
-  "Empty": new Array(12).fill(false),
-};
-
 export default function ClaveModule() {
   // 12-step on/off pattern
   const [steps, setSteps] = React.useState<boolean[]>(() => {
@@ -48,9 +36,10 @@ export default function ClaveModule() {
         if (Array.isArray(arr) && arr.length === 12) return arr.map(Boolean);
       }
     } catch {}
-    return PRESETS["Son (3-2)"];
+    // default: empty pattern
+    return new Array(12).fill(false);
   });
-  // keep a ref so scheduler always uses latest pattern without restart
+  // ref so scheduler always uses latest pattern without restart
   const stepsRef = React.useRef<boolean[]>(steps);
   React.useEffect(() => { stepsRef.current = steps; }, [steps]);
 
@@ -131,7 +120,7 @@ export default function ClaveModule() {
   function hitSound(when: number) {
     const ctx = getAudioContext();
 
-    // tiny ping (more deterministic than noise-only)
+    // deterministic tiny ping
     const ping = ctx.createOscillator();
     ping.type = "square";
     ping.frequency.value = 2100;
@@ -167,7 +156,7 @@ export default function ClaveModule() {
       const isDownbeat = s === 0;
       const isBeatStart = (s % everyN) === 0; // metronome only here
 
-      // update playhead immediately for UI (cheap state)
+      // update playhead immediately for UI
       setActiveStep(s);
 
       if (isBeatStart) metronomeSound(nextStepTimeRef.current, isDownbeat);
@@ -187,7 +176,7 @@ export default function ClaveModule() {
     const startAt = ctx.currentTime + 0.06;
     stepIndexRef.current = 0;       // start bar on downbeat
     nextStepTimeRef.current = startAt;
-    setActiveStep(11);              // so the first scheduled step (0) is a visible change
+    setActiveStep(11);              // so first visible change is step 0
     scheduleAhead();
     setRunning(true);
   }
@@ -347,22 +336,6 @@ export default function ClaveModule() {
             />
           );
         })}
-      </div>
-
-      {/* Presets */}
-      <div className="centered" style={{ marginTop: 10 }}>
-        <div className="row center" style={{ flexWrap: "wrap", gap: 8 }}>
-          {Object.keys(PRESETS).map((name) => (
-            <button
-              key={name}
-              className="chip-btn"
-              title={`Load ${name}`}
-              onClick={() => setSteps(PRESETS[name].slice())}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
       </div>
 
       <p className="muted centered" style={{ marginTop: 8 }}>
