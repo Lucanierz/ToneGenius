@@ -1,4 +1,3 @@
-// src/modules/SolfegeTrainerModule.tsx
 import React from "react";
 import MicAnswer from "../components/MicAnswer";
 import SettingsDialog from "../components/SettingsDialog";
@@ -11,8 +10,8 @@ type DegreeId =
 
 type Degree = {
   id: DegreeId;
-  name: string;        // solfege
-  semitones: number;   // relative to root
+  name: string;
+  semitones: number;
 };
 
 const DEGREES: Degree[] = [
@@ -33,7 +32,6 @@ const DEGREES: Degree[] = [
 const DEG_BY_ID: Record<DegreeId, Degree> =
   Object.fromEntries(DEGREES.map(d => [d.id, d])) as any;
 
-/** ===== Mode presets (relative to Do) ===== */
 const PRESETS: Record<string, DegreeId[]> = {
   "Ionian (Major)": ["1","2","3","4","5","6","7"],
   "Dorian": ["1","2","b3","4","5","6","b7"],
@@ -44,14 +42,12 @@ const PRESETS: Record<string, DegreeId[]> = {
   "Locrian": ["1","b2","b3","4","#4","b6","b7"],
 };
 
-/** ===== Storage keys ===== */
 const K_SELECTED  = "solfege.selected.v2";
 const K_ROOT_PC   = "solfege.rootPc.v1";
 const K_ROOT_OCT  = "solfege.rootOct.v1";
 const K_MIC       = "solfege.mic.v1";
-const K_MAX_JUMP  = "solfege.maxJump.v1"; // semitones (1..11), or 12 => no limit
+const K_MAX_JUMP  = "solfege.maxJump.v1";
 
-/** ===== Helpers ===== */
 function randomOf<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
 function loadSelected(): Set<DegreeId> {
   try {
@@ -62,7 +58,6 @@ function loadSelected(): Set<DegreeId> {
       if (valid.length) return new Set(valid);
     }
   } catch {}
-  // default: minor-pentatonic-ish to start pleasant
   return new Set<DegreeId>(["1","b3","4","5","b7"]);
 }
 function saveSelected(sel: Set<DegreeId>) {
@@ -74,14 +69,12 @@ function pcDistanceSemis(a: number, b: number): number {
 }
 
 export default function SolfegeTrainerModule() {
-  // Selection of degrees (functions)
   const [selected, setSelected] = React.useState<Set<DegreeId>>(loadSelected);
   React.useEffect(() => { saveSelected(selected); }, [selected]);
 
-  // Root (pitch class + octave)
   const [rootPc, setRootPc] = React.useState<number>(() => {
     const raw = localStorage.getItem(K_ROOT_PC);
-    return raw ? Number(raw) : 0; // C
+    return raw ? Number(raw) : 0;
   });
   const [rootOct, setRootOct] = React.useState<number>(() => {
     const raw = localStorage.getItem(K_ROOT_OCT);
@@ -90,36 +83,29 @@ export default function SolfegeTrainerModule() {
   React.useEffect(() => { try { localStorage.setItem(K_ROOT_PC, String(rootPc)); } catch {} }, [rootPc]);
   React.useEffect(() => { try { localStorage.setItem(K_ROOT_OCT, String(rootOct)); } catch {} }, [rootOct]);
 
-  // Mic enabled
   const [micEnabled, setMicEnabled] = React.useState<boolean>(() => (localStorage.getItem(K_MIC) ?? "true") === "true");
   React.useEffect(() => { try { localStorage.setItem(K_MIC, String(micEnabled)); } catch {} }, [micEnabled]);
 
-  // Maximum jump size (in semitones between consecutive targets; 12 = no limit)
   const [maxJump, setMaxJump] = React.useState<number>(() => {
     const raw = Number(localStorage.getItem(K_MAX_JUMP) ?? 12);
     return (raw >= 1 && raw <= 12) ? raw : 12;
   });
   React.useEffect(() => { try { localStorage.setItem(K_MAX_JUMP, String(maxJump)); } catch {} }, [maxJump]);
 
-  // Current target
   type Target = { id: DegreeId; name: string; semitones: number; answerPc: number; };
   const [target, setTarget] = React.useState<Target | null>(null);
   const prevTargetRef = React.useRef<Target | null>(null);
 
-  // Audio play/suspend
   const [isPlayingRoot, setIsPlayingRoot] = React.useState(false);
   const [isPlayingTarget, setIsPlayingTarget] = React.useState(false);
   const stopRef = React.useRef<null | (() => void)>(null);
   const suspendMic = isPlayingRoot || isPlayingTarget;
 
-  // Timing (answer hold)
-  const HOLD_MS = 500;
-  const CENTS_TOL = 25;
+  const HOLD_MS = 350;        // was 500
+  const CENTS_TOL = 35;       // was 25
 
-  // Settings dialog
   const [openSettings, setOpenSettings] = React.useState(false);
 
-  // Build entries from PC_TO_NAME (Record<number, string>), sorted by pc
   const ROOT_ENTRIES = React.useMemo(
     () =>
       Object.entries(PC_TO_NAME as Record<number, string>)
@@ -128,7 +114,6 @@ export default function SolfegeTrainerModule() {
     []
   );
 
-  // Question creation with max-jump constraint (by pitch class distance)
   function pickTarget() {
     const ids = Array.from(selected);
     if (ids.length === 0) { setTarget(null); return; }
@@ -142,7 +127,7 @@ export default function SolfegeTrainerModule() {
         const s = DEG_BY_ID[id].semitones % 12;
         return pcDistanceSemis(prevSemis, s) <= maxJump;
       });
-      if (pool.length === 0) pool = ids; // fallback if constraint empties pool
+      if (pool.length === 0) pool = ids;
     }
 
     const chosen = randomOf(pool);
@@ -156,12 +141,10 @@ export default function SolfegeTrainerModule() {
   React.useEffect(() => { pickTarget(); }, []);
   React.useEffect(() => { pickTarget(); }, [selected, rootPc, maxJump]);
 
-  // On correct via mic
   const handleMicCorrect = React.useCallback(() => {
-    setTimeout(() => pickTarget(), 180);
+    setTimeout(() => pickTarget(), 160);
   }, []);
 
-  // Audio previews (suspend mic while playing)
   function startPlay(pc: number, oct: number) {
     try {
       stopRef.current?.();
@@ -189,7 +172,6 @@ export default function SolfegeTrainerModule() {
   }
   function stopTarget() { stopPlay(); setIsPlayingTarget(false); }
 
-  // UI pieces
   function toggleDegree(id: DegreeId, checked: boolean) {
     const next = new Set(selected);
     checked ? next.add(id) : next.delete(id);
@@ -201,17 +183,14 @@ export default function SolfegeTrainerModule() {
 
   return (
     <div className="panel">
-      {/* Settings button (centered) */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
         <button className="icon-btn" onClick={() => setOpenSettings(true)} title="Settings" aria-label="Open settings">
           ⚙️
         </button>
       </div>
 
-      {/* ===== Target display: centered step name, then root & target below (centered) ===== */}
       {target ? (
         <>
-          {/* Big centered solfege name */}
           <div className="centered" style={{ marginTop: 6 }}>
             <div className="hero-label" style={{ marginBottom: 6 }}>Solfege</div>
             <div className="hero-note" style={{ fontSize: "clamp(36px, 8vw, 72px)" }}>
@@ -219,7 +198,6 @@ export default function SolfegeTrainerModule() {
             </div>
           </div>
 
-          {/* Root & Target (centered row inside a full-width flex wrapper) */}
           <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
             <div className="row center" style={{ gap: 24, marginTop: 12, flexWrap: "wrap" }}>
               <div className="hero-block" style={{ minWidth: 160, textAlign: "center" }}>
@@ -241,7 +219,6 @@ export default function SolfegeTrainerModule() {
             Sing/play <strong>{target.name}</strong> → {(PC_TO_NAME as Record<number,string>)[target.answerPc]} relative to {(PC_TO_NAME as Record<number,string>)[rootPc]}. Octave doesn’t matter.
           </div>
 
-          {/* Controls (centered row inside a full-width flex wrapper) */}
           <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
             <div className="row center" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
               <button
@@ -278,7 +255,6 @@ export default function SolfegeTrainerModule() {
             </div>
           </div>
 
-          {/* Mic listener (silent; no meter UI) + tip (centered) */}
           {micEnabled && (
             <>
               <MicAnswer
@@ -302,10 +278,8 @@ export default function SolfegeTrainerModule() {
         </p>
       )}
 
-      {/* ===== Settings dialog ===== */}
       <SettingsDialog title="Solfege Settings" open={openSettings} onClose={() => setOpenSettings(false)}>
         <div className="settings-grid" style={{ justifyItems: "center", textAlign: "center" }}>
-          {/* Root selection */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Root (1) &amp; Microphone</h4>
             <div className="row" style={{ flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
@@ -347,7 +321,6 @@ export default function SolfegeTrainerModule() {
 
           <div className="settings-divider" style={{ width: "100%" }} />
 
-          {/* Max jump */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Maximum jump size</h4>
             <div className="row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
@@ -370,7 +343,6 @@ export default function SolfegeTrainerModule() {
 
           <div className="settings-divider" style={{ width: "100%" }} />
 
-          {/* Degree selection + presets */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Included degrees (functions)</h4>
             <div

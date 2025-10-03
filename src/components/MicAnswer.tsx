@@ -3,7 +3,6 @@ import {
   startMicAnalyser,
   detectPitchHzYIN,
   freqToPc,
-  midiToFreq,
   freqToMidi,
 } from "../utils/audio";
 
@@ -48,6 +47,14 @@ class OneEuro {
   }
 }
 
+/** Signed cents offset to a pitch-class using modular MIDI math (no ref freq). */
+function centsToPitchClass(midiFloat: number, targetPc: number): number {
+  // distance in semitones from target pitch-class (wrap to [-6, +6))
+  const diffSemis = midiFloat - targetPc;                // can be any real
+  const wrapped = diffSemis - 12 * Math.round(diffSemis / 12); // nearest octave of that PC
+  return wrapped * 100;                                   // signed cents
+}
+
 export default function MicAnswer({
   enabled,
   suspend = false,
@@ -72,10 +79,10 @@ export default function MicAnswer({
   const centsMedianRef = React.useRef<number[]>([]);
   const lastReportRef = React.useRef<number>(0);
 
-  // tuned knobs (slightly looser & friendlier)
+  // knobs
   const REPORT_INTERVAL_MS = 60;
-  const YIN_THRESHOLD = 0.10;           // was 0.12 (more sensitive)
-  const HYSTERESIS_EXTRA_CENTS = 5;     // was 7 (less sticky boundary)
+  const YIN_THRESHOLD = 0.10;          // a bit more sensitive
+  const HYSTERESIS_EXTRA_CENTS = 5;     // gentle boundary
 
   React.useEffect(() => {
     if (!enabled || suspend) { stop(); return; }
@@ -114,11 +121,6 @@ export default function MicAnswer({
     tick();
   }
 
-  function nearestMidiForPc(midiFloat: number, pc: number): number {
-    const k = Math.round((midiFloat - pc) / 12);
-    return pc + 12 * k;
-  }
-
   function median(a: number[]) {
     if (!a.length) return 0;
     const s = [...a].sort((x, y) => x - y);
@@ -134,7 +136,7 @@ export default function MicAnswer({
     const dt = Math.min(150, Math.max(0.001, now - (lastTsRef.current || now))) / 1000; // seconds
     lastTsRef.current = now;
 
-    // YIN pitch (slightly lower threshold to catch softer/airier tones)
+    // YIN pitch
     const hzRaw = detectPitchHzYIN(an, 30, 900, YIN_THRESHOLD);
     let hzSmooth: number | null = null;
 
@@ -142,15 +144,13 @@ export default function MicAnswer({
       lastPitchSeenRef.current = now;
       hzSmooth = euroRef.current.filter(hzRaw, dt);
 
-      // compare to nearest instance of target pitch class
       const midiFloat = freqToMidi(hzSmooth);
-      const candidateMidi = nearestMidiForPc(midiFloat, targetPc);
-      const refFreq = midiToFreq(candidateMidi);
-      const centsRaw = 1200 * Math.log2(hzSmooth / refFreq);
+      // robust cents-from-target-PC (avoids ref freq rounding quirks)
+      const centsRaw = centsToPitchClass(midiFloat, targetPc);
 
-      // adapt window size: calmer for bass, faster up high
+      // short median to reject flickers (longer for bass)
       const win = centsMedianRef.current;
-      const maxWin = hzSmooth < 130 ? 9 : 5; // was 11/7
+      const maxWin = hzSmooth < 130 ? 9 : 5;
       win.push(centsRaw);
       if (win.length > maxWin) win.shift();
       const centsFiltered = median(win);
@@ -167,11 +167,10 @@ export default function MicAnswer({
           onCorrect();
         }
       } else if (outRange) {
-        // only reset if clearly out of range; small flutter near edge won't nuke progress
         heldMsRef.current = 0;
       }
     } else {
-      // no stable pitch — allow slight grace (don’t immediately reset)
+      // silence/unstable: gentle grace before reset
       if (now - lastPitchSeenRef.current > 220) {
         hzSmooth = null;
         centsMedianRef.current = [];
