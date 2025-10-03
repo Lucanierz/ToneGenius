@@ -14,7 +14,7 @@ function loadDefaultSelection(): Set<string> {
     if (raw) return new Set(JSON.parse(raw) as string[]);
   } catch {}
   // default: everything selected
-  return new Set(INTERVALS.map(i => i.id));
+  return new Set(INTERVALS.map((i) => i.id));
 }
 
 export function useIntervalSelection(): [Set<string>, (next: Set<string>) => void] {
@@ -30,7 +30,7 @@ export function useIntervalSelection(): [Set<string>, (next: Set<string>) => voi
 export default function IntervalPicker({ selected, onChange }: Props) {
   const groups = React.useMemo(() => {
     const map: Record<Interval["group"], Interval[]> = { simple: [], extensions: [] };
-    INTERVALS.forEach(i => map[i.group].push(i));
+    INTERVALS.forEach((i) => map[i.group].push(i));
     return map;
   }, []);
 
@@ -42,24 +42,28 @@ export default function IntervalPicker({ selected, onChange }: Props) {
 
   function selectAll(group?: "simple" | "extensions") {
     const next = new Set(selected);
-    (group ? groups[group] : INTERVALS).forEach(i => next.add(i.id));
+    (group ? groups[group] : INTERVALS).forEach((i) => next.add(i.id));
     onChange(next);
   }
   function clearAll(group?: "simple" | "extensions") {
     const next = new Set(selected);
-    (group ? groups[group] : INTERVALS).forEach(i => next.delete(i.id));
+    (group ? groups[group] : INTERVALS).forEach((i) => next.delete(i.id));
     onChange(next);
   }
 
   return (
     <div className="picker">
-      {(["simple","extensions"] as const).map((g) => (
+      {(["simple", "extensions"] as const).map((g) => (
         <div key={g} className="picker-section">
           <div className="picker-header">
             <strong>{g === "simple" ? "Simple" : "Extensions"}</strong>
             <div className="picker-actions">
-              <button className="chip-btn" onClick={() => selectAll(g)}>All</button>
-              <button className="chip-btn" onClick={() => clearAll(g)}>None</button>
+              <button type="button" className="button small" onClick={() => selectAll(g)}>
+                All
+              </button>
+              <button type="button" className="button small" onClick={() => clearAll(g)}>
+                None
+              </button>
             </div>
           </div>
           <div className="picker-grid">
@@ -78,8 +82,12 @@ export default function IntervalPicker({ selected, onChange }: Props) {
       ))}
 
       <div className="picker-footer">
-        <button className="chip-btn" onClick={() => selectAll()}>Select all</button>
-        <button className="chip-btn" onClick={() => clearAll()}>Clear all</button>
+        <button type="button" className="button small" onClick={() => selectAll()}>
+          Select all
+        </button>
+        <button type="button" className="button small" onClick={() => clearAll()}>
+          Clear all
+        </button>
       </div>
     </div>
   );

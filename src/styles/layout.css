@@ -1,0 +1,48 @@
+.panel {
+  width: min(900px, 92vw);
+  margin: 60px auto 40px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.panel-title { font-weight: 800; letter-spacing: .2px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.question { margin-top: 12px; }
+
+/* Neat settings layout inside the modal */
+.settings-grid {
+  display: grid;
+  gap: 16px;
+}
+.settings-section {
+  display: grid;
+  gap: 8px;
+}
+.settings-section h4 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+
+/* thin, theme-aware divider line for settings */
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+  border-radius: 1px;
+  opacity: 0.9;
+}
+
+/* optional: tighten headings + spacing a touch */
+.settings-section h4 {
+  margin: 0 0 2px 0;
+}
+.settings-grid { gap: 14px; } /* was 16px if you prefer it a bit tighter */

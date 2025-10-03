@@ -1,0 +1,53 @@
+.input, .select {
+  appearance: none;
+  background: var(--field-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: none;
+  min-width: 140px;
+}
+.input::placeholder { color: var(--muted); }
+
+.button, .icon-btn {
+  background: var(--chip);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.button:hover, .icon-btn:hover { filter: brightness(1.05); }
+.button[disabled] { opacity: .6; cursor: not-allowed; }
+
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
+
+.check { display: inline-flex; align-items: center; gap: 8px; }
+.check input[type="checkbox"], .check input[type="radio"] {
+  width: 16px; height: 16px; accent-color: var(--accent);
+}
+
+/* Wrong-answer feedback */
+@keyframes shake-x {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes flash-red {
+  0% { background-color: var(--field-bg); border-color: var(--border); }
+  20% { background-color: rgba(255, 93, 93, 0.18); border-color: #ff5d5d; }
+  100% { background-color: var(--field-bg); border-color: var(--border); }
+}
+.input.shake { animation: shake-x 220ms ease; }
+.input.error-flash { animation: flash-red 320ms ease; }
+
+/* compact button variant for small controls */
+.button.small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}

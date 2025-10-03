@@ -1,0 +1,34 @@
+:root {
+  --bg: #0f1115;
+  --text: #e8ecf1;
+  --muted: #aab4c0;
+  --border: #242833;
+  --chip: #171b23;
+  --field-bg: #121520;
+  --accent: #4a7dff;
+
+  --radius: 12px;
+  --shadow: 0 2px 14px rgba(0,0,0,.16);
+}
+
+/* Light theme (data-theme="light" on <html> or <body>) */
+:root[data-theme="light"], body.theme-light {
+  --bg: #f7f8fb;
+  --text: #111318;
+  --muted: #5a6678;
+  --border: #d8dde6;
+  --chip: #ffffff;
+  --field-bg: #ffffff;
+  --accent: #3b6fff;
+}
+
+/* Dark theme (data-theme="dark") */
+:root[data-theme="dark"], body.theme-dark {
+  --bg: #0f1115;
+  --text: #e8ecf1;
+  --muted: #aab4c0;
+  --border: #242833;
+  --chip: #171b23;
+  --field-bg: #121520;
+  --accent: #4a7dff;
+}

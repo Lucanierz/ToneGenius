@@ -1,0 +1,119 @@
+/* ===== Interval Quiz layout ===== */
+
+/* compact stats row under header */
+.stats-bar { margin-top: 6px; gap: 6px; }
+
+/* Big, readable hero question area */
+.question-hero {
+  margin: 18px 0 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  justify-items: center;
+}
+
+.hero-block { text-align: center; }
+
+.hero-label {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.hero-note {
+  font-size: clamp(48px, 7vw, 80px);
+  font-weight: 900;
+  letter-spacing: .5px;
+  line-height: 1;
+}
+
+/* Make the whole interval row big so arrow scales with it */
+.hero-interval {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  /* BIG size now lives here (applies to both name + arrow) */
+  font-size: clamp(40px, 6.2vw, 68px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .3px;
+}
+
+/* Let the name inherit size from .hero-interval */
+.hero-name {
+  font: inherit;
+}
+
+/* Direction arrow: inline, same size as name */
+.dir-arrow {
+  font-size: 1em !important;   /* override any earlier .dir-arrow = 0.95em */
+  line-height: 1;
+  margin-left: 6px;
+  color: var(--text);
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  opacity: 0.95;
+}
+
+/* Nuke any legacy circular arrow styles that might remain */
+.hero-arrow {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Sub text */
+.hero-sub {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* Answer controls row */
+.answer-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0 6px;
+}
+.answer-row .input {
+  min-width: 150px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Footnote tip under tuner */
+.foot-tip { margin-top: 10px; text-align: center; }
+
+/* Wrong-answer feedback */
+@keyframes shake-x {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes flash-red {
+  0% { background-color: var(--field-bg); border-color: var(--border); }
+  20% { background-color: rgba(255, 93, 93, 0.18); border-color: #ff5d5d; }
+  100% { background-color: var(--field-bg); border-color: var(--border); }
+}
+.input.shake { animation: shake-x 220ms ease; }
+.input.error-flash { animation: flash-red 320ms ease; }
+
+/* Responsive: stack hero blocks on small screens */
+@media (max-width: 560px) {
+  .question-hero { grid-template-columns: 1fr; gap: 8px; }
+}

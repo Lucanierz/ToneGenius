@@ -1,0 +1,96 @@
+/* ===== Modal / Settings dialog ===== */
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1100; /* above drawer (999) and hamburger (1000) */
+  display: grid;
+  place-items: center; /* center panel even if panel isn't absolutely positioned */
+}
+
+/* Blurred darkened backdrop */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 0; /* explicitly below the panel */
+}
+
+/* Panel */
+.modal-panel {
+  position: relative;            /* relative is enough since root centers it */
+  z-index: 1;                    /* above overlay */
+  width: min(820px, 92vw);
+  max-height: min(80vh, 880px);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  outline: none;
+  overflow: hidden;              /* rounded corners show properly */
+}
+
+/* Header */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--chip);
+}
+.modal-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.modal-close {
+  color: var(--text);
+}
+
+/* Content */
+.modal-content {
+  padding: 14px;
+  overflow: auto;
+  display: block;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Ensure form controls look like the rest inside the modal */
+.settings-dialog .button,
+.settings-dialog .icon-btn,
+.settings-dialog .select,
+.settings-dialog .input {
+  background: var(--chip);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.settings-dialog .button:hover,
+.settings-dialog .icon-btn:hover { filter: brightness(1.05); }
+
+/* Keep checkboxes/radios themed */
+.settings-dialog input[type="checkbox"],
+.settings-dialog input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Tidy section layout (pairs with layout.css .settings-grid/.settings-section) */
+.settings-dialog .settings-grid { display: grid; gap: 16px; }
+.settings-dialog .settings-section { display: grid; gap: 8px; }
+.settings-dialog .settings-section h4 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+
+/* Optional: gentle appear animation */
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.modal-panel { animation: modalIn 140ms ease-out; }

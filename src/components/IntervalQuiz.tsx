@@ -11,7 +11,6 @@ import {
 } from "../utils/music";
 import IntervalPicker, { useIntervalSelection } from "./IntervalPicker";
 import SettingsDialog from "./SettingsDialog";
-import ThemeSelector from "./ThemeSelector";
 import MicAnswer from "./MicAnswer";
 import Tuner from "./Tuner";
 import { startPitchClass } from "../utils/audio";
@@ -43,7 +42,6 @@ function makeQuestion(allowedIds: Set<string>, dirSetting: DirectionSetting): Qu
   return { root, intervalId: interval.id, semitones: interval.semitones, answerPc, dir };
 }
 
-// fast auto-advance on correct
 const AUTO_NEXT_MS = 200;
 
 type Stats = {
@@ -61,13 +59,10 @@ function msToSec(ms: number) { return (ms / 1000).toFixed(1); }
 // sanitize input to 1 note + optional accidental
 function sanitizeNoteInput(raw: string): string {
   if (!raw) return "";
-  // strip spaces, normalize unicode sharps/flats
   let s = raw.replace(/\s+/g, "").replace(/♯/g, "#").replace(/♭/g, "b");
-  // find first letter A-G
   const m = s.match(/[A-Ga-g]/);
   if (!m) return "";
   const note = m[0].toUpperCase();
-  // look for first accidental after that
   const rest = s.slice(m.index! + 1);
   const accMatch = rest.match(/[#bB]/);
   if (accMatch) {
@@ -86,7 +81,6 @@ export default function IntervalQuiz() {
   const [qStartedAt, setQStartedAt] = React.useState<number>(() => Date.now());
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
-  // UI: wrong flash/shake
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   // mic + playback settings (persisted)
@@ -119,6 +113,16 @@ export default function IntervalQuiz() {
   );
   React.useEffect(() => { saveStats(stats); }, [stats]);
 
+  // reliable focus helper
+  const focusInputSoon = React.useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select?.();
+      });
+    });
+  }, []);
+
   function startNewQuestion() {
     if (selected.size === 0) {
       setQuestion(null); setInput(""); setDisabled(true); return;
@@ -130,12 +134,12 @@ export default function IntervalQuiz() {
     setDisabled(false);
     setLastPitchHz(null);
     setIsPlaying(false);
-    // keep focus in the box
-    setTimeout(() => inputRef.current?.focus(), 0);
+    focusInputSoon();
   }
 
   React.useEffect(() => { startNewQuestion(); }, []);                       // mount
   React.useEffect(() => { startNewQuestion(); }, [selected, dirSetting]);   // selection/direction change
+  React.useEffect(() => { if (question) focusInputSoon(); }, [question, focusInputSoon]); // refocus on new question
 
   function registerAttempt(ok: boolean, elapsed: number) {
     setStats((s) => {
@@ -149,17 +153,17 @@ export default function IntervalQuiz() {
 
     if (ok) {
       setDisabled(true);
-      window.setTimeout(() => startNewQuestion(), AUTO_NEXT_MS);
+      window.setTimeout(() => {
+        startNewQuestion();
+        focusInputSoon();
+      }, AUTO_NEXT_MS);
     } else {
-      // imperative pulse every time (re-triggers even on rapid Enter)
       const el = inputRef.current;
       if (el) {
         el.classList.remove("shake", "error-flash");
-        // Force reflow twice to ensure restart across browsers
         void el.offsetWidth; void el.offsetWidth;
         el.classList.add("shake", "error-flash");
       }
-      // leave input text untouched; user can press Enter repeatedly
     }
   }
 
@@ -167,11 +171,7 @@ export default function IntervalQuiz() {
     if (disabled || !question) return;
     const elapsed = Date.now() - qStartedAt;
     const normalized = normalizeNoteInput(input);
-    if (!normalized) {
-      // still trigger red if empty/invalid
-      registerAttempt(false, elapsed);
-      return;
-    }
+    if (!normalized) { registerAttempt(false, elapsed); return; }
     const expectedName = PC_TO_NAME[question.answerPc];
     const ok = isEnharmonicallyEqual(normalized, expectedName);
     registerAttempt(ok, elapsed);
@@ -179,21 +179,18 @@ export default function IntervalQuiz() {
 
   function next() { startNewQuestion(); }
 
-  // Global hotkeys — ignore while typing in inputs/selects/contentEditable
+  // Global hotkeys (N/S) when not typing in fields
   React.useEffect(() => {
     function isTypingTarget(el: EventTarget | null) {
       if (!(el instanceof HTMLElement)) return false;
       const tag = el.tagName.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return true;
-      if (el.isContentEditable) return true;
-      return false;
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
     }
     function onKey(e: KeyboardEvent) {
-      if (isTypingTarget(e.target)) return; // typing 'n'/'s' is allowed in input; handled below
+      if (isTypingTarget(e.target)) return;
       const k = e.key.toLowerCase();
       if (k === "n") next();
       if (k === "s") setIsSettingsOpen((v) => !v);
-      // no global Enter — only the input handles Enter
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -201,6 +198,7 @@ export default function IntervalQuiz() {
 
   const accuracy = stats.total === 0 ? 100 : Math.round((stats.correct / stats.total) * 100);
   const avgMs = stats.correct === 0 ? 0 : Math.round(stats.totalTimeMs / stats.correct);
+  const dirArrow = question?.dir === "down" ? "↓" : "↑";
 
   // mic callbacks
   const handleMicHeard = React.useCallback((_heardPc: number, _ok: boolean) => {}, []);
@@ -228,13 +226,11 @@ export default function IntervalQuiz() {
     setIsPlaying(false);
   }
 
-  const dirArrow = question?.dir === "down" ? "↓" : "↑";
-
   return (
     <div className="panel">
       {/* Header */}
       <div className="panel-header">
-        <div className="panel-title">Training</div>
+        <div className="panel-title">Interval Quiz</div>
         <button
           type="button"
           className="icon-btn"
@@ -244,8 +240,8 @@ export default function IntervalQuiz() {
         >⚙️</button>
       </div>
 
-      {/* Stats */}
-      <div className="controls row" style={{ marginTop: 6 }}>
+      {/* Compact stats bar */}
+      <div className="controls row stats-bar">
         <span className="badge">Correct: {stats.correct}</span>
         <span className="badge">Tries: {stats.total}</span>
         <span className="badge">Accuracy: {accuracy}%</span>
@@ -255,25 +251,39 @@ export default function IntervalQuiz() {
         <span className="badge">Last: {stats.total ? `${msToSec(stats.lastTimeMs)}s` : "—"}</span>
       </div>
 
-      {/* Question */}
+      {/* ===== HERO QUESTION ===== */}
       {selected.size === 0 ? (
         <p className="muted" style={{ marginTop: 8 }}>
           Open <span className="kbd">Settings</span> to choose intervals to practice.
         </p>
       ) : question && (
-        <div className="question centered">
-          <div className="row center">
-            <div className="big">Root: {question.root}</div>
-            <div className="big">
-              Interval: {question.intervalId}{" "}
-              <span className="dir-arrow" title={question.dir === "down" ? "Down" : "Up"}>
-                {dirArrow}
-              </span>
+        <>
+          <div className="question-hero">
+            <div className="hero-block">
+              <div className="hero-label">Root</div>
+              <div className="hero-note">{question.root}</div>
+            </div>
+            <div className="hero-block">
+              <div className="hero-label">Interval</div>
+              <div className="hero-interval">
+                <span className="hero-name">{question.intervalId}</span>
+                <span
+                  className="dir-arrow"
+                  title={question.dir === "down" ? "Down" : "Up"}
+                  aria-hidden
+                  style={{ marginLeft: 8 }}
+                >
+                  {dirArrow}
+                </span>
+              </div>
             </div>
           </div>
+          <div className="hero-sub muted">
+            Type the resulting pitch (or play it) {question.dir === "down" ? "down from" : "up from"} the root.
+          </div>
 
-          {/* centered main input box */}
-          <div className="row center">
+          {/* Answer row */}
+          <div className="answer-row">
             <input
               ref={inputRef}
               className="input"
@@ -282,30 +292,12 @@ export default function IntervalQuiz() {
               onChange={(e) => setInput(sanitizeNoteInput(e.target.value))}
               onKeyDown={(e) => {
                 const k = e.key.toLowerCase();
-
-                // 1) Primary actions
-                if (k === "enter") {
-                  e.preventDefault();
-                  submit();
-                  return;
-                }
-                if (k === "s") {
-                  e.preventDefault();            // don't type 's'
-                  setIsSettingsOpen(true);       // open Settings even while focused
-                  return;
-                }
-                if (k === "n") {
-                  e.preventDefault();            // don't type 'n'
-                  next();                        // allow Next while focused
-                  return;
-                }
-
-                // 2) Realtime guard so field never exceeds 2 chars or invalid pattern
+                if (k === "enter") { e.preventDefault(); submit(); return; }
+                if (k === "s") { e.preventDefault(); setIsSettingsOpen(true); return; }
+                if (k === "n") { e.preventDefault(); next(); return; }
                 if (e.key.length === 1) {
                   const tentative = sanitizeNoteInput(input + e.key);
-                  if (tentative.length > 2) {
-                    e.preventDefault();
-                  }
+                  if (tentative.length > 2) e.preventDefault();
                 }
               }}
               autoCapitalize="characters"
@@ -322,32 +314,23 @@ export default function IntervalQuiz() {
               className="button"
               title="Hold to play target pitch"
               aria-pressed={isPlaying}
-              // Mouse
               onMouseDown={startPlayTarget}
               onMouseUp={stopPlayTarget}
               onMouseLeave={stopPlayTarget}
-              // Touch
               onTouchStart={(e) => { e.preventDefault(); startPlayTarget(); }}
               onTouchEnd={stopPlayTarget}
-              // Keyboard (Space/Enter)
               onKeyDown={(e) => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  startPlayTarget();
-                }
+                if (e.key === " " || e.key === "Enter") { e.preventDefault(); startPlayTarget(); }
               }}
               onKeyUp={(e) => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  stopPlayTarget();
-                }
+                if (e.key === " " || e.key === "Enter") { e.preventDefault(); stopPlayTarget(); }
               }}
             >
               ▶ Hold to play
             </button>
           </div>
 
-          {/* Mic listening + tuner */}
+          {/* Mic + Tuner */}
           {micEnabled && (
             <>
               <MicAnswer
@@ -366,11 +349,11 @@ export default function IntervalQuiz() {
             </>
           )}
 
-          <p className="muted">
+          <p className="muted foot-tip">
             Follow the direction arrow. Input a note like <span className="kbd">A</span> or <span className="kbd">Gb</span>.
-            Type the note OR enable mic and hold it in tune (±{CENTS_TOL}¢) for {HOLD_MS}ms.
+            Or play it on your instrument and hold in tune (±{CENTS_TOL}¢) for {HOLD_MS}ms.
           </p>
-        </div>
+        </>
       )}
 
       {/* Settings */}
@@ -379,12 +362,10 @@ export default function IntervalQuiz() {
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       >
-        <div style={{ display: "grid", gap: 14 }}>
-          <ThemeSelector />
-          <hr className="div" />
+        <div className="settings-grid">
           {/* Direction */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <strong>Interval direction</strong>
+          <section className="settings-section">
+            <h4>Interval direction</h4>
             <div className="row">
               {(["up","down","both"] as DirectionSetting[]).map(opt => (
                 <label key={opt} className="check" style={{ gap: 8 }}>
@@ -398,10 +379,13 @@ export default function IntervalQuiz() {
                 </label>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div style={{ display: "grid", gap: 10 }}>
-            <strong>Answer method</strong>
+          <div className="settings-divider" />
+
+          {/* Answer method */}
+          <section className="settings-section">
+            <h4>Answer method</h4>
             <label className="check">
               <input
                 type="checkbox"
@@ -410,13 +394,16 @@ export default function IntervalQuiz() {
               />
               <span>Enable microphone answer (play note on your instrument)</span>
             </label>
-            <p className="muted" style={{ marginTop: 0 }}>
-              While playing the target tone, the mic is paused to avoid pickup.
+            <p className="muted" style={{ marginTop: 6 }}>
+              While the target tone plays, the mic pauses to avoid pickup.
             </p>
-          </div>
+          </section>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <strong>Playback (target note)</strong>
+          <div className="settings-divider" />
+
+          {/* Playback */}
+          <section className="settings-section">
+            <h4>Playback (target note)</h4>
             <div className="row">
               <label className="check" style={{ gap: 8 }}>
                 <span>Octave</span>
@@ -441,15 +428,18 @@ export default function IntervalQuiz() {
                 </select>
               </label>
             </div>
-          </div>
+          </section>
 
-          <hr className="div" />
-          <div>
+          <div className="settings-divider" />
+
+          {/* Intervals */}
+          <section className="settings-section">
+            <h4>Intervals</h4>
             <p className="muted" style={{ marginTop: 0 }}>
-              Pick which intervals to include in your quiz.
+              Choose which intervals to include in the quiz.
             </p>
             <IntervalPicker selected={selected} onChange={setSelected} />
-          </div>
+          </section>
         </div>
       </SettingsDialog>
     </div>

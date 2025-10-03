@@ -1,0 +1,95 @@
+/* ===== Tuner ===== */
+.tuner {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  justify-items: center;
+  margin-top: 10px;
+}
+
+.tuner-note {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tuner-note-name {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+.tuner-octave {
+  font-size: 18px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.tuner-meter {
+  display: grid;
+  gap: 6px;
+  width: min(560px, 92vw);
+}
+
+.tuner-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tuner-track {
+  position: relative;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+}
+.tuner-needle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--text);
+  transform: translateX(-1px);
+  transition: left 140ms ease-out; /* gentle glide */
+  box-shadow: 0 0 8px rgba(0,0,0,0.15);
+}
+.tuner-center-mark {
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 2px;
+  background: rgba(127, 140, 255, 0.35);
+  transform: translateX(-1px);
+}
+.tuner-cents {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Color heat overlay */
+.tuner-heat {
+  position: absolute; inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.22;
+}
+.tuner-track.exact .tuner-heat { background: #15c26b; }   /* green */
+.tuner-track.near  .tuner-heat { background: #ffd23f; }   /* yellow */
+.tuner-track.mid   .tuner-heat { background: #ff9f40; }   /* orange */
+.tuner-track.far   .tuner-heat { background: #ff5d5d; }   /* red */
+
+/* ===== Mic row ===== */
+.mic-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.mic-meter {
+  position: relative;
+  width: 160px; height: 8px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mic-level {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--accent), rgba(74,125,255,0.6));
+}

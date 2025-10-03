@@ -1,5 +1,6 @@
 // src/utils/audio.ts
-// WebAudio helpers + YIN/autocorrelation pitch detection with pre-filtering.
+// WebAudio helpers + YIN/autocorrelation pitch detection with pre-filtering
+// and optional dynamics compression (helps stabilize level for detection).
 
 let audioCtx: AudioContext | null = null;
 export function getAudioContext(): AudioContext {
@@ -14,6 +15,16 @@ export type MicAnalyserOptions = {
   lpHz?: number;             // low-pass cutoff
   notch50?: boolean;         // notch 50Hz hum
   notch60?: boolean;         // notch 60Hz hum
+
+  // NEW: dynamics control
+  compressor?: boolean;      // insert a DynamicsCompressorNode
+  compThreshold?: number;    // dB, default -24
+  compKnee?: number;         // dB, default 6
+  compRatio?: number;        // :1, default 4
+  compAttack?: number;       // seconds, default 0.003 (~3ms)
+  compRelease?: number;      // seconds, default 0.25
+
+  preGainDb?: number;        // optional pre-gain before compressor (dB), default 0
 };
 
 /** Start mic and return {analyser, cleanup, stream}. Throws on permission error. */
@@ -29,6 +40,15 @@ export async function startMicAnalyser(opts: MicAnalyserOptions = {}): Promise<{
     lpHz = 1200,             // keep fundamentals; tame upper harmonics
     notch50 = true,
     notch60 = false,
+
+    compressor = false,
+    compThreshold = -24,
+    compKnee = 6,
+    compRatio = 4,
+    compAttack = 0.003,
+    compRelease = 0.25,
+
+    preGainDb = 0,
   } = opts;
 
   const ctx = getAudioContext();
@@ -43,8 +63,10 @@ export async function startMicAnalyser(opts: MicAnalyserOptions = {}): Promise<{
 
   const source = ctx.createMediaStreamSource(stream);
 
-  // Optional pre-filtering: HPF -> (hum notch) -> LPF
+  // Build chain: Source -> [Filters] -> [PreGain] -> [Compressor] -> Analyser
   let lastNode: AudioNode = source;
+
+  // Optional pre-filtering: HPF -> (hum notch) -> LPF
   if (filtering) {
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
@@ -78,6 +100,30 @@ export async function startMicAnalyser(opts: MicAnalyserOptions = {}): Promise<{
     lastNode = lp;
   }
 
+  // Optional pre-gain (useful for very quiet inputs)
+  let preGain: GainNode | null = null;
+  if (preGainDb !== 0) {
+    preGain = ctx.createGain();
+    preGain.gain.value = dbToLinear(preGainDb);
+    lastNode.connect(preGain);
+    lastNode = preGain;
+  }
+
+  // Optional dynamics compressor
+  let comp: DynamicsCompressorNode | null = null;
+  if (compressor) {
+    comp = ctx.createDynamicsCompressor();
+    // Set compressor parameters
+    if (comp.threshold) comp.threshold.value = compThreshold;
+    if (comp.knee) comp.knee.value = compKnee;
+    if (comp.ratio) comp.ratio.value = compRatio;
+    if (comp.attack) comp.attack.value = compAttack;
+    if (comp.release) comp.release.value = compRelease;
+
+    lastNode.connect(comp);
+    lastNode = comp;
+  }
+
   const analyser = ctx.createAnalyser();
   analyser.fftSize = fftSize;
   analyser.smoothingTimeConstant = 0.94; // steadier frames
@@ -85,6 +131,8 @@ export async function startMicAnalyser(opts: MicAnalyserOptions = {}): Promise<{
 
   const cleanup = () => {
     try { lastNode.disconnect(); } catch {}
+    try { if (comp) comp.disconnect(); } catch {}
+    try { if (preGain) preGain.disconnect(); } catch {}
     try { source.disconnect(); } catch {}
     stream.getTracks().forEach((t) => t.stop());
   };
@@ -280,4 +328,9 @@ export function startPitchClass(
   }
 
   return stop;
+}
+
+/* helpers */
+function dbToLinear(db: number) {
+  return Math.pow(10, db / 20);
 }
