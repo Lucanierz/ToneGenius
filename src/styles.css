@@ -427,3 +427,29 @@ hr.div {
   background: linear-gradient(90deg, var(--accent), rgba(74,125,255,0.6));
 }
 
+.dir-arrow {
+  display: inline-block;
+  font-size: 0.9em;
+  line-height: 1;
+  opacity: 1;
+  margin-left: 6px;
+}
+
+/* Wrong answer feedback: shake + brief red flash */
+@keyframes shake-x {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes flash-red {
+  0% { background-color: var(--field-bg); border-color: var(--border); }
+  20% { background-color: rgba(255, 93, 93, 0.18); border-color: #ff5d5d; }
+  100% { background-color: var(--field-bg); border-color: var(--border); }
+}
+.input.shake { animation: shake-x 220ms ease; }
+.input.error-flash { animation: flash-red 320ms ease; }
+
+
