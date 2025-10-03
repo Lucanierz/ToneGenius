@@ -13,6 +13,17 @@ const NOTE_OPTIONS = Object.entries(PC_TO_NAME as Record<number, string>)
   .map(([pc, name]) => ({ pc: Number(pc), name }))
   .sort((a, b) => a.pc - b.pc);
 
+// Map 0..100% -> dB (roughly -48 dB to 0 dB, with gentle curve near 0)
+function percentToDb(pct: number) {
+  const p = Math.max(0, Math.min(100, pct)) / 100;
+  if (p <= 0) return -120; // effectively silent
+  const eased = Math.pow(p, 0.7); // audio-ish taper
+  return -48 + 48 * eased;
+}
+function dbToLinear(db: number) {
+  return Math.pow(10, db / 20);
+}
+
 export default function ToneGeneratorModule() {
   // UI state (persisted)
   const [mode, setMode] = React.useState<Mode>(() => (localStorage.getItem("tone.mode") as Mode) || "note");
@@ -28,15 +39,32 @@ export default function ToneGeneratorModule() {
   // Transport
   const [playing, setPlaying] = React.useState(false);
 
+  // Volume (percent, 0..100) — default 70%
+  const [volumePct, setVolumePct] = React.useState<number>(() => {
+    const v = Number(localStorage.getItem("tone.volPct") ?? 70);
+    return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 70;
+  });
+
   React.useEffect(() => { try { localStorage.setItem("tone.mode", mode); } catch {} }, [mode]);
   React.useEffect(() => { try { localStorage.setItem("tone.wave", wave); } catch {} }, [wave]);
   React.useEffect(() => { try { localStorage.setItem("tone.pc", String(pc)); } catch {} }, [pc]);
   React.useEffect(() => { try { localStorage.setItem("tone.oct", String(oct)); } catch {} }, [oct]);
   React.useEffect(() => { try { localStorage.setItem("tone.hz", hzInput); } catch {} }, [hzInput]);
+  React.useEffect(() => { try { localStorage.setItem("tone.volPct", String(volumePct)); } catch {} }, [volumePct]);
 
   // Audio graph refs
   const oscRef = React.useRef<OscillatorNode | null>(null);
   const gainRef = React.useRef<GainNode | null>(null);
+
+  // Volume smoothing (zipper-noise fix)
+  const volRafRef = React.useRef<number | null>(null);
+  const desiredVolPctRef = React.useRef<number>(volumePct);
+
+  // Envelope / smoothing constants
+  const ATTACK_MS = 18;          // quick fade-in
+  const RELEASE_MS = 70;         // gentle fade-out
+  const VOL_TC = 0.035;          // setTargetAtTime time constant (seconds) for volume slew
+  const FREQ_RAMP_S = 0.05;      // small freq ramp
 
   // Compute target frequency
   const targetHz = React.useMemo(() => {
@@ -60,11 +88,16 @@ export default function ToneGeneratorModule() {
     osc.type = wave;
     osc.frequency.value = targetHz || 440;
 
-    // modest level
-    gain.gain.value = dbToLinear(-8);
+    // Start silent and attack to target (prevents click)
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0, now);
 
     osc.connect(gain).connect(ctx.destination);
     osc.start();
+
+    // Apply attack towards the current desired volume
+    const targetLin = dbToLinear(percentToDb(desiredVolPctRef.current));
+    gain.gain.setTargetAtTime(targetLin, now, ATTACK_MS / 1000);
 
     oscRef.current = osc;
     gainRef.current = gain;
@@ -75,6 +108,19 @@ export default function ToneGeneratorModule() {
     const gain = gainRef.current;
     oscRef.current = null;
     gainRef.current = null;
+    try {
+      if (gain && osc) {
+        const now = gain.context.currentTime;
+        gain.gain.setTargetAtTime(0, now, RELEASE_MS / 1000);
+        // stop a bit after release completes
+        osc.stop(now + RELEASE_MS / 1000 + 0.03);
+        setTimeout(() => {
+          try { osc.disconnect(); } catch {}
+          try { gain.disconnect(); } catch {}
+        }, RELEASE_MS + 60);
+        return;
+      }
+    } catch {}
     try { osc?.stop(); } catch {}
     try { osc?.disconnect(); } catch {}
     try { gain?.disconnect(); } catch {}
@@ -82,13 +128,8 @@ export default function ToneGeneratorModule() {
 
   // Start/stop
   React.useEffect(() => {
-    if (playing) {
-      ensureGraph();
-    } else {
-      stopGraph();
-    }
-    // cleanup on unmount
-    return () => {};
+    if (playing) ensureGraph();
+    else stopGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
@@ -108,17 +149,42 @@ export default function ToneGeneratorModule() {
       const now = osc.context.currentTime;
       try {
         osc.frequency.cancelScheduledValues(now);
-        // smooth small ramp
-        if (osc.frequency.value <= 0) {
-          osc.frequency.value = f;
-        } else {
-          osc.frequency.exponentialRampToValueAtTime(f, now + 0.05);
-        }
+        if (osc.frequency.value <= 0) osc.frequency.setValueAtTime(f, now);
+        else osc.frequency.exponentialRampToValueAtTime(f, now + FREQ_RAMP_S);
       } catch {
         osc.frequency.value = f;
       }
     }
   }, [targetHz]);
+
+  // Throttled, smoothed volume automation to avoid zipper noise
+  React.useEffect(() => {
+    desiredVolPctRef.current = volumePct;
+
+    // only run loop while playing
+    if (!playing || !gainRef.current) return;
+
+    function tick() {
+      const gain = gainRef.current!;
+      const ctx = gain.context;
+      const now = ctx.currentTime;
+      const lin = dbToLinear(percentToDb(desiredVolPctRef.current));
+      try {
+        // cancel and slew towards new target smoothly
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(lin, now, VOL_TC);
+      } catch {
+        gain.gain.value = lin;
+      }
+      volRafRef.current = requestAnimationFrame(tick);
+    }
+
+    volRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (volRafRef.current != null) cancelAnimationFrame(volRafRef.current);
+      volRafRef.current = null;
+    };
+  }, [volumePct, playing]);
 
   // Stop audio when unmounting
   React.useEffect(() => stopGraph, []);
@@ -129,7 +195,7 @@ export default function ToneGeneratorModule() {
 
   return (
     <div className="panel">
-      {/* Simple inline header for this module (since your app renders a tile bar already) */}
+      {/* Top controls: mode + wave */}
       <div className="centered" style={{ marginTop: 6 }}>
         <div className="row center" style={{ gap: 10, flexWrap: "wrap" }}>
           {/* Mode toggle */}
@@ -164,7 +230,7 @@ export default function ToneGeneratorModule() {
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Mode-specific controls */}
       {mode === "note" ? (
         <div className="centered" style={{ marginTop: 12 }}>
           <div className="row center" style={{ gap: 12, flexWrap: "wrap" }}>
@@ -208,6 +274,26 @@ export default function ToneGeneratorModule() {
         </div>
       )}
 
+      {/* Volume */}
+      <div className="centered" style={{ marginTop: 14 }}>
+        <div className="row center" style={{ gap: 10, flexWrap: "wrap" }}>
+          <label className="check" style={{ gap: 8 }}>
+            <span>Volume</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={volumePct}
+              onChange={(e) => setVolumePct(Number(e.target.value))}
+              style={{ width: 220 }}
+              aria-label="Volume"
+            />
+          </label>
+          <span className="badge">{volumePct}%</span>
+        </div>
+      </div>
+
       {/* Transport */}
       <div className="centered" style={{ marginTop: 16 }}>
         <button className="button" onClick={togglePlay} aria-pressed={playing}>
@@ -216,9 +302,4 @@ export default function ToneGeneratorModule() {
       </div>
     </div>
   );
-}
-
-/* ---------- utils ---------- */
-function dbToLinear(db: number) {
-  return Math.pow(10, db / 20);
 }
