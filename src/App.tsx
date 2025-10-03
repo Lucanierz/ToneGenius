@@ -1,4 +1,3 @@
-// src/App.tsx
 import React from "react";
 import IntervalQuiz from "./components/IntervalQuiz";
 import MetronomeModule from "./modules/MetronomeModule";
@@ -80,16 +79,13 @@ export default function App() {
   }
 
   /* ======= Pointer-based drag & drop (mobile + desktop) ======= */
-  // We draw an absolute overlay indicator that doesn't affect layout.
   const canvasRef = React.useRef<HTMLElement | null>(null);
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
   const [indicatorTop, setIndicatorTop] = React.useState<number | null>(null);
   const [targetIndex, setTargetIndex] = React.useState<number | null>(null);
 
-  // Hysteresis: only change target gap if pointer improves by > this many pixels
   const HYSTERESIS_PX = 10;
 
-  // Measure current gap positions (in document space) and return gaps + helper to map to canvas coords
   function measureGaps() {
     const canvas = canvasRef.current!;
     const tilesEls = Array.from(canvas.querySelectorAll<HTMLElement>(".tile"));
@@ -98,27 +94,22 @@ export default function App() {
 
     const gapsDocY: number[] = [];
     if (rects.length === 0) {
-      gapsDocY.push(canvasTopDoc); // single gap
+      gapsDocY.push(canvasTopDoc);
     } else {
-      // before first
       gapsDocY.push(rects[0].top + window.scrollY);
-      // between
       for (let i = 0; i < rects.length - 1; i++) {
         const mid = (rects[i].bottom + rects[i + 1].top) / 2;
         gapsDocY.push(mid + window.scrollY);
       }
-      // after last
       gapsDocY.push(rects[rects.length - 1].bottom + window.scrollY);
     }
 
     function toCanvasTop(docY: number) {
       return docY - canvasTopDoc;
     }
-
     return { gapsDocY, toCanvasTop };
   }
 
-  // Compute nearest gap with hysteresis
   function nearestGapIndex(docY: number, prevIdx: number | null, prevDocY: number | null, gapsDocY: number[]) {
     let bestIdx = 0;
     let bestDist = Infinity;
@@ -128,19 +119,12 @@ export default function App() {
     }
     if (prevIdx != null && prevDocY != null) {
       const prevDist = Math.abs(prevDocY - docY);
-      // Only switch if the new gap improves distance by at least HYSTERESIS_PX
-      if (bestDist > prevDist - HYSTERESIS_PX) {
-        return prevIdx;
-      }
+      if (bestDist > prevDist - HYSTERESIS_PX) return prevIdx;
     }
     return bestIdx;
   }
 
-  const dragDataRef = React.useRef<{
-    startId: string;
-    lastIdx: number | null;
-    lastDocY: number | null;
-  } | null>(null);
+  const dragDataRef = React.useRef<{ startId: string; lastIdx: number | null; lastDocY: number | null; } | null>(null);
 
   function startDrag(id: string, e: React.PointerEvent) {
     setDraggingId(id);
@@ -154,7 +138,6 @@ export default function App() {
     setIndicatorTop(toCanvasTop(gapsDocY[idx]));
     dragDataRef.current = { startId: id, lastIdx: idx, lastDocY: docY };
 
-    // prevent the page from scrolling while dragging
     document.body.style.userSelect = "none";
     document.body.style.touchAction = "none";
   }
@@ -187,7 +170,7 @@ export default function App() {
       const fromIdx = prev.findIndex((t) => t.id === fromId);
       if (fromIdx < 0) return prev.slice();
       let toIdx = toIdxRaw;
-      if (fromIdx < toIdx) toIdx -= 1; // removal shifts target down by 1
+      if (fromIdx < toIdx) toIdx -= 1;
       toIdx = Math.max(0, Math.min(prev.length - 1, toIdx));
       const next = [...prev];
       const [moved] = next.splice(fromIdx, 1);
@@ -229,14 +212,7 @@ export default function App() {
       <aside className={`drawer ${drawerOpen ? "open" : ""}`}>
         <div className="drawer-header">
           <div className="drawer-title">Add to view</div>
-          <button
-            className="icon-btn"
-            aria-label="Close"
-            onClick={() => setDrawerOpen(false)}
-            title="Close"
-          >
-            ✕
-          </button>
+          <button className="icon-btn" aria-label="Close" onClick={() => setDrawerOpen(false)} title="Close">✕</button>
         </div>
 
         <ul className="drawer-list">
@@ -244,11 +220,7 @@ export default function App() {
             const def = MODULES[k];
             return (
               <li key={k}>
-                <button
-                  className="drawer-item"
-                  onClick={() => addModule(k)}
-                  title={`Add ${def.title}`}
-                >
+                <button className="drawer-item" onClick={() => addModule(k)} title={`Add ${def.title}`}>
                   <span className="icon" aria-hidden>{def.icon}</span>
                   <span className="label">{def.title}</span>
                   <span className="check" aria-hidden>＋</span>
@@ -278,13 +250,9 @@ export default function App() {
 
       {/* Main canvas with tiles stacked */}
       <main className="canvas" ref={canvasRef}>
-        {/* Absolute overlay indicator (doesn't affect layout) */}
+        {/* Absolute overlay indicator */}
         {indicatorTop != null && (
-          <div
-            className="drop-indicator-overlay"
-            style={{ top: `${indicatorTop}px` }}
-            aria-hidden
-          />
+          <div className="drop-indicator-overlay" style={{ top: `${indicatorTop}px` }} aria-hidden />
         )}
 
         {tiles.length === 0 ? (
@@ -297,29 +265,40 @@ export default function App() {
             const isDragging = draggingId === t.id;
             return (
               <section className={`tile ${isDragging ? "dragging" : ""}`} key={t.id}>
-                <div className="tile-controls">
-                  <button
-                    className="tile-close"
-                    aria-label={`Remove ${Def.title}`}
-                    title={`Remove ${Def.title}`}
-                    onClick={() => removeTile(t.id)}
-                  >
-                    ✕
-                  </button>
-                  <div
-                    className="tile-handle"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
-                    onPointerDown={(e) => startDrag(t.id, e)}
-                    onPointerMove={onDragMove}
-                    onPointerUp={endDrag}
-                    onPointerCancel={cleanupDrag}
-                  >
-                    <span className="grip" />
-                    <span className="grip" />
-                    <span className="grip" />
+                {/* NEW: Tile header bar with title on the left, controls on the right */}
+                <div className="tile-bar">
+                  <div className="tile-title">
+                    <span className="tile-icon" aria-hidden>
+                      {MODULES[t.key].icon}
+                    </span>
+                    {MODULES[t.key].title}
+                  </div>
+                  <div className="tile-controls">
+                    <button
+                      className="tile-close"
+                      aria-label={`Remove ${Def.title}`}
+                      title={`Remove ${Def.title}`}
+                      onClick={() => removeTile(t.id)}
+                    >
+                      ✕
+                    </button>
+                    <div
+                      className="tile-handle"
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder"
+                      onPointerDown={(e) => startDrag(t.id, e)}
+                      onPointerMove={onDragMove}
+                      onPointerUp={endDrag}
+                      onPointerCancel={cleanupDrag}
+                    >
+                      <span className="grip" />
+                      <span className="grip" />
+                      <span className="grip" />
+                    </div>
                   </div>
                 </div>
+
+                {/* Render module content; we hide its internal header via CSS */}
                 {Def.render()}
               </section>
             );

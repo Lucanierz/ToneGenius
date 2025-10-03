@@ -31,7 +31,7 @@
 
 /* Main canvas stacks tiles; relative for absolute drop indicator */
 .canvas {
-  position: relative;           /* <-- needed for overlay indicator positioning */
+  position: relative;
   max-width: 960px;
   margin: 16px auto;
   padding: 0 12px 24px;
@@ -48,7 +48,7 @@
   position: absolute;
   left: 8px;
   right: 8px;
-  height: 10px;                /* thicker visual target */
+  height: 10px;
   border-radius: 999px;
   background:
     linear-gradient(90deg,
@@ -60,16 +60,12 @@
     0 0 0 1px var(--accent),
     0 6px 14px rgba(0,0,0,.18);
   opacity: 0.9;
-  pointer-events: none;        /* ignore hits */
+  pointer-events: none;
   z-index: 2;
 }
 
-/* (Legacy flow indicator, unused now — keep if you ever need it)
-.drop-indicator { ... }
-*/
-
 /* =========================
-   Tile wrapper + controls
+   Tile wrapper + header bar
    ========================= */
 
 .tile {
@@ -77,15 +73,39 @@
 }
 .tile.dragging { opacity: 0.88; }
 
-/* Controls bar (top-right): ✕ and drag handle */
-.tile-controls {
+/* NEW: tile header bar spanning tile width */
+.tile-bar {
   position: absolute;
-  top: 10px;       /* more clearance from content */
-  right: 12px;     /* more clearance from edge */
+  top: 8px;
+  left: 10px;
+  right: 10px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+}
+
+/* Title on the left (with icon) */
+.tile-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;        /* more space between ✕ and handle */
+  gap: 8px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: var(--text);
+}
+.tile-icon { font-size: 16px; }
+
+/* Controls on the right: ✕ and handle */
+.tile-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Close button */
@@ -94,7 +114,7 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 4px 10px;           /* slightly larger for easy click */
+  padding: 4px 10px;
   line-height: 1.2;
   cursor: pointer;
 }
@@ -108,11 +128,11 @@
   background: var(--chip);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 8px 10px;          /* larger target */
+  padding: 8px 10px;
   border-radius: 10px;
   cursor: grab;
   user-select: none;
-  touch-action: none;         /* prevents page scroll while dragging */
+  touch-action: none;
 }
 .tile-handle:active { cursor: grabbing; }
 .tile-handle .grip {
@@ -122,10 +142,13 @@
   border-radius: 2px;
 }
 
-/* Give the module panel extra top padding so controls don’t overlap */
+/* Give module panel extra top padding so tile-bar never overlaps content */
 .tile > .panel {
-  padding-top: 48px;          /* plenty of room under the controls */
+  padding-top: 68px; /* increased to make room for full-width tile-bar */
 }
+
+/* Also hide modules' own internal headers for a cleaner look */
+.tile .panel .panel-header { display: none; }
 
 /* =========================
    Panel (module card)
@@ -140,19 +163,7 @@
   padding: 12px 12px 14px;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 0 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.panel-title {
-  font-weight: 900;
-  letter-spacing: .2px;
-}
+.panel-title { font-weight: 900; letter-spacing: .2px; }
 
 /* =========================
    Shared layout utilities
@@ -200,7 +211,6 @@
 }
 .icon-btn:hover { filter: brightness(1.06); }
 
-/* Keyboard-style chip */
 .kbd {
   display: inline-flex;
   align-items: center;
@@ -212,10 +222,8 @@
   font-size: 12px;
 }
 
-/* Muted text helper */
 .muted { color: var(--muted); }
 
-/* Settings separators used inside SettingsDialog content */
 .settings-divider {
   height: 1px;
   background: var(--border);
@@ -223,9 +231,7 @@
   border-radius: 1px;
   opacity: 0.9;
 }
-.settings-section h4 {
-  margin: 0 0 2px 0;
-}
+.settings-section h4 { margin: 0 0 2px 0; }
 .settings-grid { display: grid; gap: 14px; }
 
 /* Empty state */
@@ -270,6 +276,6 @@
 
 @media (max-width: 560px) {
   .panel { border-radius: 12px; }
-  .panel-header { padding-bottom: 6px; }
   .canvas { padding: 0 10px 20px; gap: 12px; }
+  .tile > .panel { padding-top: 72px; } /* a hair more space on small screens */
 }
