@@ -1,137 +1,117 @@
-/* ===== App shell / drawer ===== */
-.app-root { position: relative; min-height: 100dvh; }
-
-/* Hamburger button (morphs to X) */
-.hamburger {
-  position: fixed;
-  top: 14px; left: 14px;
-  width: 38px; height: 34px;
-  display: inline-flex; flex-direction: column; justify-content: center; gap: 6px;
-  background: var(--chip);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 6px 10px;
-  z-index: 1000;
-  box-shadow: 0 2px 10px rgba(0,0,0,.06);
-  cursor: pointer;
-}
-.hamburger span {
-  display: block;
-  height: 2px; width: 18px;
-  background: var(--text);           /* theme-aware line color */
-  border-radius: 1px;
-  transition: transform .18s ease, opacity .18s ease, width .18s ease, background .18s ease;
-}
-/* Morph bars into an "X" */
-.hamburger.open span:nth-child(1) { transform: translateY(4px) rotate(45deg); width: 20px; }
-.hamburger.open span:nth-child(2) { opacity: 0; }
-.hamburger.open span:nth-child(3) { transform: translateY(-4px) rotate(-45deg); width: 20px; }
-
-/* While the drawer is open, keep the hamburger from overlapping the header */
-.hamburger.open {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Drawer overlay & panel */
+/* ===== Drawer (left panel) ===== */
 .drawer {
-  position: fixed; inset: 0; z-index: 999;
-  background: rgba(0,0,0,.25);
-  opacity: 0; pointer-events: none;
-  transition: opacity .18s ease;
-}
-.drawer.open { opacity: 1; pointer-events: auto; }
-
-.drawer-panel {
-  position: absolute; top: 0; left: 0;
-  height: 100%; width: min(280px, 90vw);
-  background: var(--bg); color: var(--text);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 300px;                 /* solid, not full-screen */
+  max-width: 90vw;
+  background: var(--bg);        /* opaque, theme-aware */
+  color: var(--text);
   border-right: 1px solid var(--border);
-  box-shadow: 4px 0 24px rgba(0,0,0,.12);
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  z-index: 999;
   transform: translateX(-100%);
-  transition: transform .22s ease;
-  display: grid; grid-template-rows: auto 1fr auto;
+  transition: transform 180ms ease-out;
 }
-.drawer.open .drawer-panel { transform: translateX(0); }
+.drawer.open { transform: translateX(0); }
 
-/* Header */
 .drawer-header {
-  position: relative; z-index: 1;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-.drawer-close {
-  background: transparent; border: 0;
-  font-size: 16px; cursor: pointer;
-  color: var(--text);
-}
-
-/* Modules list — tight vertical stack, theme-aware text */
-.drawer-list {
-  list-style: none; padding: 8px; margin: 0;
-  display: flex; flex-direction: column;
-  gap: 6px;                       /* compact spacing between items */
-  justify-content: flex-start;    /* no full-height spacing */
-  align-items: stretch;
-  align-content: flex-start;
-}
-
-/* Ensure drawer text uses the theme color everywhere */
-.drawer-panel,
-.drawer-item,
-.drawer-item span,
-.drawer-item * { color: var(--text) !important; }
-
-/* Module item */
-.drawer-item {
-  width: 100%; text-align: left;
-  display: flex; align-items: center; gap: 10px;
   background: var(--chip);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
 }
-.drawer-item .icon {
-  display: inline-flex;
-  width: 22px; min-width: 22px;
-  justify-content: center; align-items: center;
-  line-height: 1; font-size: 18px;
-}
-.drawer-item.active { outline: 2px solid var(--accent); }
-.drawer-item:hover { filter: brightness(1.03); }
+.drawer-title { font-weight: 800; }
 
-/* Footer */
-.drawer-footer {
+.drawer-list {
   display: grid;
   gap: 8px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
+  padding: 10px 12px 80px; /* leave space above footer */
 }
+.drawer-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+.drawer-item.added { opacity: 0.7; }
+.drawer-item .icon { font-size: 18px; }
+.drawer-item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-item .check { font-weight: 800; }
 
-/* Global theme toggle */
+/* Footer with theme toggle pinned to bottom */
+.drawer-foot {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .theme-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+}
+.theme-btn {
   background: var(--chip);
   color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  line-height: 1;
   cursor: pointer;
-  width: fit-content;
 }
-.theme-toggle:hover { filter: brightness(1.04); }
-.theme-toggle .theme-icon { font-size: 16px; line-height: 1; }
-.theme-toggle .theme-text { font-size: 13px; }
+.theme-btn:hover { filter: brightness(1.06); }
 
-.drawer-tip { color: var(--muted); }
+/* Backdrop behind drawer (no blur, not transparent UI) */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 998;
+}
 
+/* Hamburger */
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+}
+.hamburger span {
+  display: block;
+  height: 2px;
+  width: 18px;
+  background: var(--text);
+  transform-origin: center;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
-/* Keep app content slightly pushed down so the fixed hamburger doesn't cover it */
-.app-content { padding-top: 8px; }
+/* Topbar brand */
+.topbar .brand {
+  font-weight: 800;
+  letter-spacing: .2px;
+}

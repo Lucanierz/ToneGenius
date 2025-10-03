@@ -1,38 +1,210 @@
-.panel {
-  width: min(900px, 92vw);
-  margin: 60px auto 40px;
+/* =========================
+   Global Layout / Panels
+   ========================= */
+
+.app {
+  min-height: 100vh;
+  background: var(--app-bg, var(--bg));
+  color: var(--text);
+}
+
+/* Top bar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .brand {
+  font-weight: 800;
+  letter-spacing: .2px;
+  user-select: none;
+}
+
+/* Main canvas stacks tiles vertically */
+.canvas {
+  max-width: 960px;
+  margin: 16px auto;
+  padding: 0 12px 24px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+/* =========================
+   Drag & drop indicator
+   ========================= */
+
+.drop-indicator {
+  height: 10px;                /* thicker visual target */
+  margin: 2px 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      var(--accent) 10%,
+      var(--accent) 90%,
+      transparent 100%);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 4px 10px rgba(0,0,0,.15);
+  opacity: 0.85;
+}
+
+/* =========================
+   Tile wrapper + controls
+   ========================= */
+
+.tile {
+  position: relative;
+}
+
+/* Controls bar (top-right): ✕ and drag handle */
+.tile-controls {
+  position: absolute;
+  top: 10px;       /* more clearance from content */
+  right: 12px;     /* more clearance from edge */
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;        /* more space between ✕ and handle */
+}
+
+/* Close button */
+.tile-close {
+  background: var(--chip);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px 10px;           /* slightly larger for easy click */
+  line-height: 1.2;
+  cursor: pointer;
+}
+.tile-close:hover { filter: brightness(1.06); }
+
+/* Drag handle (three bars) */
+.tile-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   background: var(--chip);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  box-shadow: var(--shadow);
+  color: var(--text);
+  padding: 8px 10px;          /* larger target */
+  border-radius: 10px;
+  cursor: grab;
+  user-select: none;
+}
+.tile-handle:active { cursor: grabbing; }
+.tile-handle .grip {
+  width: 3px; height: 14px;
+  background: var(--text);
+  opacity: 0.55;
+  border-radius: 2px;
+}
+
+/* Give the module panel extra top padding so controls don’t overlap */
+.tile > .panel {
+  padding-top: 48px;          /* was ~18; now plenty of room */
+}
+
+/* =========================
+   Panel (module card)
+   ========================= */
+
+.panel {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  padding: 12px 12px 14px;
 }
 
 .panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 8px 0;
+  border-bottom: 1px solid var(--border);
 }
-.panel-title { font-weight: 800; letter-spacing: .2px; }
 
-.controls { display: flex; flex-wrap: wrap; gap: 6px; }
-.question { margin-top: 12px; }
-
-/* Neat settings layout inside the modal */
-.settings-grid {
-  display: grid;
-  gap: 16px;
+.panel-title {
+  font-weight: 900;
+  letter-spacing: .2px;
 }
-.settings-section {
-  display: grid;
+
+/* =========================
+   Shared layout utilities
+   ========================= */
+
+.row {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 }
-.settings-section h4 {
-  margin: 0;
-  font-size: 14px;
-  letter-spacing: .02em;
+.row.center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-/* thin, theme-aware divider line for settings */
+.centered { text-align: center; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  color: var(--text);
+  cursor: pointer;
+}
+.icon-btn:hover { filter: brightness(1.06); }
+
+/* Keyboard-style chip */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--chip);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+/* Muted text helper */
+.muted { color: var(--muted); }
+
+/* Settings separators used inside SettingsDialog content */
 .settings-divider {
   height: 1px;
   background: var(--border);
@@ -40,9 +212,53 @@
   border-radius: 1px;
   opacity: 0.9;
 }
-
-/* optional: tighten headings + spacing a touch */
 .settings-section h4 {
   margin: 0 0 2px 0;
 }
-.settings-grid { gap: 14px; } /* was 16px if you prefer it a bit tighter */
+.settings-grid { display: grid; gap: 14px; }
+
+/* Empty state */
+.empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  background: var(--bg);
+}
+
+/* =========================
+   Hamburger button (visual)
+   ========================= */
+
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+}
+.hamburger span {
+  display: block;
+  height: 2px;
+  width: 18px;
+  background: var(--text);
+  transform-origin: center;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+/* =========================
+   Responsive tweaks
+   ========================= */
+
+@media (max-width: 560px) {
+  .panel { border-radius: 12px; }
+  .panel-header { padding-bottom: 6px; }
+  .canvas { padding: 0 10px 20px; gap: 12px; }
+}
