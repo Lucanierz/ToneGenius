@@ -101,8 +101,9 @@ export default function SolfegeTrainerModule() {
   const stopRef = React.useRef<null | (() => void)>(null);
   const suspendMic = isPlayingRoot || isPlayingTarget;
 
-  const HOLD_MS = 350;        // was 500
-  const CENTS_TOL = 35;       // was 25
+  // slightly friendlier defaults (you can tweak)
+  const HOLD_MS = 320;
+  const CENTS_TOL = 36;
 
   const [openSettings, setOpenSettings] = React.useState(false);
 
@@ -280,6 +281,7 @@ export default function SolfegeTrainerModule() {
 
       <SettingsDialog title="Solfege Settings" open={openSettings} onClose={() => setOpenSettings(false)}>
         <div className="settings-grid" style={{ justifyItems: "center", textAlign: "center" }}>
+          {/* Root & Mic */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Root (1) &amp; Microphone</h4>
             <div className="row" style={{ flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
@@ -321,6 +323,7 @@ export default function SolfegeTrainerModule() {
 
           <div className="settings-divider" style={{ width: "100%" }} />
 
+          {/* Max jump */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Maximum jump size</h4>
             <div className="row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
@@ -343,6 +346,7 @@ export default function SolfegeTrainerModule() {
 
           <div className="settings-divider" style={{ width: "100%" }} />
 
+          {/* Degrees */}
           <section className="settings-section" style={{ width: "100%" }}>
             <h4 style={{ marginBottom: 8, textAlign: "center" }}>Included degrees (functions)</h4>
             <div
