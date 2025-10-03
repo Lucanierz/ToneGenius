@@ -1,3 +1,4 @@
+// src/App.tsx
 import React from "react";
 import IntervalQuiz from "./components/IntervalQuiz";
 import MetronomeModule from "./modules/MetronomeModule";
@@ -20,7 +21,7 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
 
 type Tile = { id: string; key: ModuleKey };
 
-const TILES_KEY = "app.tiles.v2";
+const TILES_KEY = "app.tiles.v3";
 const THEME_KEY = "app.theme.v1";
 
 /* ---------- helpers ---------- */
@@ -59,9 +60,6 @@ export default function App() {
   const [theme, setTheme] = React.useState<"light" | "dark">(loadTheme);
   const [tiles, setTiles] = React.useState<Tile[]>(loadTiles);
 
-  // drop indicator index (0..tiles.length), or null when not dragging
-  const [dropIndex, setDropIndex] = React.useState<number | null>(null);
-
   React.useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem(THEME_KEY, theme); } catch {}
@@ -81,68 +79,133 @@ export default function App() {
     setTheme((t) => (t === "light" ? "dark" : "light"));
   }
 
-  /* ------- Drag & Drop reordering (HTML5 DnD) ------- */
-  const dragIdRef = React.useRef<string | null>(null);
+  /* ======= Pointer-based drag & drop (mobile + desktop) ======= */
+  // We draw an absolute overlay indicator that doesn't affect layout.
+  const canvasRef = React.useRef<HTMLElement | null>(null);
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [indicatorTop, setIndicatorTop] = React.useState<number | null>(null);
+  const [targetIndex, setTargetIndex] = React.useState<number | null>(null);
 
-  function onDragStart(id: string, ev: React.DragEvent) {
-    dragIdRef.current = id;
-    ev.dataTransfer.setData("text/plain", id);
-    ev.dataTransfer.effectAllowed = "move";
-    // show initial indicator where the dragged tile currently is
-    const idx = tiles.findIndex((t) => t.id === id);
-    setDropIndex(idx);
+  // Hysteresis: only change target gap if pointer improves by > this many pixels
+  const HYSTERESIS_PX = 10;
+
+  // Measure current gap positions (in document space) and return gaps + helper to map to canvas coords
+  function measureGaps() {
+    const canvas = canvasRef.current!;
+    const tilesEls = Array.from(canvas.querySelectorAll<HTMLElement>(".tile"));
+    const rects = tilesEls.map((el) => el.getBoundingClientRect());
+    const canvasTopDoc = canvas.getBoundingClientRect().top + window.scrollY;
+
+    const gapsDocY: number[] = [];
+    if (rects.length === 0) {
+      gapsDocY.push(canvasTopDoc); // single gap
+    } else {
+      // before first
+      gapsDocY.push(rects[0].top + window.scrollY);
+      // between
+      for (let i = 0; i < rects.length - 1; i++) {
+        const mid = (rects[i].bottom + rects[i + 1].top) / 2;
+        gapsDocY.push(mid + window.scrollY);
+      }
+      // after last
+      gapsDocY.push(rects[rects.length - 1].bottom + window.scrollY);
+    }
+
+    function toCanvasTop(docY: number) {
+      return docY - canvasTopDoc;
+    }
+
+    return { gapsDocY, toCanvasTop };
   }
 
-  function onDragOverTile(overId: string, ev: React.DragEvent<HTMLElement>) {
-    ev.preventDefault(); // allow drop
-    ev.dataTransfer.dropEffect = "move";
-
-    const el = ev.currentTarget;
-    const rect = el.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const before = ev.clientY < midY;
-
-    const overIdx = tiles.findIndex((t) => t.id === overId);
-    if (overIdx < 0) return;
-
-    const idx = before ? overIdx : overIdx + 1;
-    if (dropIndex !== idx) setDropIndex(idx);
+  // Compute nearest gap with hysteresis
+  function nearestGapIndex(docY: number, prevIdx: number | null, prevDocY: number | null, gapsDocY: number[]) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < gapsDocY.length; i++) {
+      const d = Math.abs(gapsDocY[i] - docY);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (prevIdx != null && prevDocY != null) {
+      const prevDist = Math.abs(prevDocY - docY);
+      // Only switch if the new gap improves distance by at least HYSTERESIS_PX
+      if (bestDist > prevDist - HYSTERESIS_PX) {
+        return prevIdx;
+      }
+    }
+    return bestIdx;
   }
 
-  function onDragOverCanvasEnd(ev: React.DragEvent<HTMLElement>) {
-    // when dragging below the last tile, indicate append
-    ev.preventDefault();
-    const endIdx = tiles.length;
-    if (dropIndex !== endIdx) setDropIndex(endIdx);
+  const dragDataRef = React.useRef<{
+    startId: string;
+    lastIdx: number | null;
+    lastDocY: number | null;
+  } | null>(null);
+
+  function startDrag(id: string, e: React.PointerEvent) {
+    setDraggingId(id);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const { gapsDocY, toCanvasTop } = measureGaps();
+    const docY = e.clientY + window.scrollY;
+    const idx = nearestGapIndex(docY, null, null, gapsDocY);
+
+    setTargetIndex(idx);
+    setIndicatorTop(toCanvasTop(gapsDocY[idx]));
+    dragDataRef.current = { startId: id, lastIdx: idx, lastDocY: docY };
+
+    // prevent the page from scrolling while dragging
+    document.body.style.userSelect = "none";
+    document.body.style.touchAction = "none";
   }
 
-  function onDrop(ev: React.DragEvent) {
-    ev.preventDefault();
-    const fromId = dragIdRef.current || ev.dataTransfer.getData("text/plain");
-    const targetIndex = dropIndex;
-    dragIdRef.current = null;
-    setDropIndex(null);
-    if (!fromId || targetIndex == null) return;
+  function onDragMove(e: React.PointerEvent) {
+    if (!dragDataRef.current || draggingId == null) return;
+    const { lastIdx, lastDocY } = dragDataRef.current;
+    const { gapsDocY, toCanvasTop } = measureGaps();
+    const docY = e.clientY + window.scrollY;
+    const idx = nearestGapIndex(docY, lastIdx, lastDocY, gapsDocY);
+
+    if (idx !== lastIdx) {
+      setTargetIndex(idx);
+      setIndicatorTop(toCanvasTop(gapsDocY[idx]));
+      dragDataRef.current.lastIdx = idx;
+    }
+    dragDataRef.current.lastDocY = docY;
+  }
+
+  function endDrag() {
+    if (!dragDataRef.current || draggingId == null || targetIndex == null) {
+      cleanupDrag();
+      return;
+    }
+
+    const fromId = dragDataRef.current.startId;
+    const toIdxRaw = targetIndex;
 
     setTiles((prev) => {
       const fromIdx = prev.findIndex((t) => t.id === fromId);
-      if (fromIdx < 0) return prev;
-      let toIdx = targetIndex;
-      // if dragging downwards past own position, the removal shifts the target left by 1
-      if (fromIdx < toIdx) toIdx -= 1;
-      if (toIdx < 0 || toIdx > prev.length) return prev;
+      if (fromIdx < 0) return prev.slice();
+      let toIdx = toIdxRaw;
+      if (fromIdx < toIdx) toIdx -= 1; // removal shifts target down by 1
+      toIdx = Math.max(0, Math.min(prev.length - 1, toIdx));
       const next = [...prev];
       const [moved] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, moved);
       return next;
     });
+
+    cleanupDrag();
   }
 
-  function onDragEnd() {
-    dragIdRef.current = null;
-    setDropIndex(null);
+  function cleanupDrag() {
+    setDraggingId(null);
+    setIndicatorTop(null);
+    setTargetIndex(null);
+    dragDataRef.current = null;
+    document.body.style.userSelect = "";
+    document.body.style.touchAction = "";
   }
-  /* --------------------------------------------------- */
 
   return (
     <div className={`app ${drawerOpen ? "drawer-open" : ""}`}>
@@ -214,57 +277,51 @@ export default function App() {
       {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
 
       {/* Main canvas with tiles stacked */}
-      <main
-        className="canvas"
-        // allow drop at the very end (below last tile)
-        onDragOver={onDragOverCanvasEnd}
-        onDrop={onDrop}
-      >
+      <main className="canvas" ref={canvasRef}>
+        {/* Absolute overlay indicator (doesn't affect layout) */}
+        {indicatorTop != null && (
+          <div
+            className="drop-indicator-overlay"
+            style={{ top: `${indicatorTop}px` }}
+            aria-hidden
+          />
+        )}
+
         {tiles.length === 0 ? (
           <div className="empty">
             <p className="muted">No modules yet. Open the menu and add some 👇</p>
           </div>
         ) : (
-          tiles.map((t, i) => {
+          tiles.map((t) => {
             const Def = MODULES[t.key];
+            const isDragging = draggingId === t.id;
             return (
-              <React.Fragment key={t.id}>
-                {/* drop indicator BEFORE this tile */}
-                {dropIndex === i && <div className="drop-indicator" aria-hidden />}
-
-                <section
-                  className="tile"
-                  draggable
-                  onDragStart={(e) => onDragStart(t.id, e)}
-                  onDragOver={(e) => onDragOverTile(t.id, e)}
-                  onDrop={onDrop}
-                  onDragEnd={onDragEnd}
-                >
-                  {/* Controls bar: more spacing, no overlap */}
-                  <div className="tile-controls">
-                    <button
-                      className="tile-close"
-                      aria-label={`Remove ${Def.title}`}
-                      title={`Remove ${Def.title}`}
-                      onClick={() => removeTile(t.id)}
-                    >
-                      ✕
-                    </button>
-                    <div className="tile-handle" title="Drag to reorder" aria-label="Drag to reorder">
-                      <span className="grip" />
-                      <span className="grip" />
-                      <span className="grip" />
-                    </div>
+              <section className={`tile ${isDragging ? "dragging" : ""}`} key={t.id}>
+                <div className="tile-controls">
+                  <button
+                    className="tile-close"
+                    aria-label={`Remove ${Def.title}`}
+                    title={`Remove ${Def.title}`}
+                    onClick={() => removeTile(t.id)}
+                  >
+                    ✕
+                  </button>
+                  <div
+                    className="tile-handle"
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                    onPointerDown={(e) => startDrag(t.id, e)}
+                    onPointerMove={onDragMove}
+                    onPointerUp={endDrag}
+                    onPointerCancel={cleanupDrag}
+                  >
+                    <span className="grip" />
+                    <span className="grip" />
+                    <span className="grip" />
                   </div>
-
-                  {Def.render()}
-                </section>
-
-                {/* If indicator should sit AFTER last tile */}
-                {i === tiles.length - 1 && dropIndex === tiles.length && (
-                  <div className="drop-indicator" aria-hidden />
-                )}
-              </React.Fragment>
+                </div>
+                {Def.render()}
+              </section>
             );
           })
         )}

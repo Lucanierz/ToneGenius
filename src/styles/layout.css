@@ -29,8 +29,9 @@
   user-select: none;
 }
 
-/* Main canvas stacks tiles vertically */
+/* Main canvas stacks tiles; relative for absolute drop indicator */
 .canvas {
+  position: relative;           /* <-- needed for overlay indicator positioning */
   max-width: 960px;
   margin: 16px auto;
   padding: 0 12px 24px;
@@ -40,12 +41,14 @@
 }
 
 /* =========================
-   Drag & drop indicator
+   Absolute drop indicator (no layout shift)
    ========================= */
 
-.drop-indicator {
+.drop-indicator-overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
   height: 10px;                /* thicker visual target */
-  margin: 2px 0;
   border-radius: 999px;
   background:
     linear-gradient(90deg,
@@ -55,9 +58,15 @@
       transparent 100%);
   box-shadow:
     0 0 0 1px var(--accent),
-    0 4px 10px rgba(0,0,0,.15);
-  opacity: 0.85;
+    0 6px 14px rgba(0,0,0,.18);
+  opacity: 0.9;
+  pointer-events: none;        /* ignore hits */
+  z-index: 2;
 }
+
+/* (Legacy flow indicator, unused now — keep if you ever need it)
+.drop-indicator { ... }
+*/
 
 /* =========================
    Tile wrapper + controls
@@ -66,6 +75,7 @@
 .tile {
   position: relative;
 }
+.tile.dragging { opacity: 0.88; }
 
 /* Controls bar (top-right): ✕ and drag handle */
 .tile-controls {
@@ -90,7 +100,7 @@
 }
 .tile-close:hover { filter: brightness(1.06); }
 
-/* Drag handle (three bars) */
+/* Drag handle (three bars) — pointer events, mobile-friendly */
 .tile-handle {
   display: inline-flex;
   align-items: center;
@@ -102,6 +112,7 @@
   border-radius: 10px;
   cursor: grab;
   user-select: none;
+  touch-action: none;         /* prevents page scroll while dragging */
 }
 .tile-handle:active { cursor: grabbing; }
 .tile-handle .grip {
@@ -113,7 +124,7 @@
 
 /* Give the module panel extra top padding so controls don’t overlap */
 .tile > .panel {
-  padding-top: 48px;          /* was ~18; now plenty of room */
+  padding-top: 48px;          /* plenty of room under the controls */
 }
 
 /* =========================
